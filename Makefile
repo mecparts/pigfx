@@ -1,6 +1,6 @@
 
-ARMGNU ?= arm-none-eabi
-CFLAGS = -Wall -Wextra -O0 -g -nostdlib -nostartfiles -fno-stack-limit -ffreestanding -mfloat-abi=hard
+#ARMGNU ?= arm-none-eabi
+CFLAGS = -Wall -Wextra -O0 -g -nostdlib -nostartfiles -fno-stack-limit -ffreestanding -mfloat-abi=hard -march=armv6j
 
 
 ## Important!!! asm.o must be the first object to be linked!
@@ -8,16 +8,16 @@ OOB = asm.o pigfx.o uart.o irq.o utils.o timer.o framebuffer.o postman.o console
 
 BUILD_DIR = build
 SRC_DIR = src
-BUILD_VERSION = $(shell git describe --all --long | cut -d "-" -f 3)
+BUILD_VERSION = RunCPM#$(shell git describe --all --long | cut -d "-" -f 3)
 
 
 OBJS=$(patsubst %.o,$(BUILD_DIR)/%.o,$(OOB))
 
-LIBGCC=$(shell $(ARMGNU)-gcc -print-libgcc-file-name)
+LIBGCC=$(shell gcc -print-libgcc-file-name)
 LIBUSPI=uspi/lib/libuspi.a
 
 all: pigfx.elf pigfx.hex kernel 
-	ctags src/
+#	ctags src/
 
 $(SRC_DIR)/pigfx_config.h: pigfx_config.h.in 
 	@sed 's/\$$VERSION\$$/$(BUILD_VERSION)/g' pigfx_config.h.in > $(SRC_DIR)/pigfx_config.h
@@ -52,7 +52,7 @@ $(BUILD_DIR)/%.o : $(SRC_DIR)/%.s
 	@$(ARMGNU)-objcopy $< -O binary $@
 	@echo "OBJCOPY $< -> $@"
 
-pigfx.elf : $(SRC_DIR)/pigfx_config.h $(OBJS) 
+pigfx.elf : $(SRC_DIR)/pigfx_config.h $(OBJS) $(LIBUSPI)
 	@$(ARMGNU)-ld $(OBJS) $(LIBGCC) $(LIBUSPI) -T memmap -o $@
 	@echo "LD $@"
 

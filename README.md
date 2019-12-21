@@ -1,28 +1,19 @@
 # PiGFX 
 ## Raspberry Pi graphics card / ANSI terminal emulator
 
-This is a fork of https://github.com/fbergama/pigfx
-with some changes to work better as a terminal for my [Altair emulator](https://www.hackster.io/david-hansel/arduino-altair-8800-simulator-3594a6)
+This is a fork of https://github.com/dhansel/pigfx (which is a fork of 
+https://github.com/fbergama/pigfx) with some changes to work better as a
+terminal for my [RunCPM based ZCPR3.3 system](https://github.com/mecparts/RunCPM/tree/zcpr33)
 and in general. The changes are:
-- baud rate can be configured by modifying config.txt file or pressing F11 at runtime
-- three different font sizes (8/14/16)
-- many improvements to ANSI control sequence support
-- support keyboard repeat function
-- fixed issue with cursor rendering after clear screen
-- keep some empty space at top and bottom of screen
-- enabled internal pull-up resistor on RX line to avoid receiving garbage
-  when RX line is not connected
+- completely separate carriage return (\r, 0x0d) and line feed (\n,
+0x0a) handling on input and output
+- improved ANSI escape sequence support (insert line, delete line)
+- moved to most recent USPi library for keyboard LED support
+- properly support keyboard repeat function
 
-I have tested this on a first generation Raspberry Pi A and B and a Raspberry Pi Zero.
-It should also work on an A+ and B+. I don't know about later generations and don't 
-have any to test with.
-
-The Pi's HDMI output as well as Composite output work but the Composite signal
-was a bit blurry when I tested it. The Pi does not have a VGA output but non-expensive 
-converters exist. I have used this with good results: https://www.ebay.com/itm/361521797200
-
-A USB keyboard is required since the Pi does not have a PS/2 keyboard connector. 
-Converters exist for that too although I have not tried any.
+I have tested this on a 512MB Raspberry Pi B because that's what I had
+and used. It was built on a Raspberry Pi 3 B+ and the makefiles have
+been slightly tweaked to account for that.
 
 To install, simply copy the content of the "bin" directory into the
 root directory of an empty, FAT32 formatted SD card and plug the card
@@ -34,45 +25,9 @@ The serial port is on the following pins:
 
 Note that Raspberry Pi pins are 3.3V (not 5V tolerant).
 
-For more instructions refer to the original project: 
+For more instructions refer to the original projects: 
+https://github.com/dhansel/pigfx
 https://github.com/fbergama/pigfx
-
-### Changing the baud rate
-
-The default baud rate is 115200 8N1. The default rate (but not the 8N1
-parameters) can be modified in the config.txt file. 
-
-At runtime, pressing F11 cycles through baud rates
-(300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200).
-This is temporary, at the next boot the baud rate reverts to the default.
-
-### Changing the font size
-
-The terminal comes with three font sizes: 8x8 (CGA), 8x14 (EGA), 8x16 (VGA).
-The default font size can be set by choosing the corresponding kernel-NN.img file.
-For example, to choose the 8x14 font as default, rename kernel-14.img to kernel.img
-on the SD card.
-
-The default kernel.img file uses the VGA font.
-
-At runtime, pressing F12 cycles through the three font sizes.
-This is temporary, at the next boot the size reverts to the default.
-
-### Changing the number of lines on the screen
-
-Some software assumes a specific number of lines on screen (often 24)
-and will not work properly if the actual screen differs from that.
-
-By default the terminal will put as many lines on the screen as possible
-given the selected font size (with a small border on the top and bottom).
-For the CGA font that's 59 lines, EGA has 34 and the VGA font has 29 lines.
-
-The number of lines can be changed at runtime by pressing F10. This will
-cycle through, starting at the maximum number, going down to 16 and then
-back to maximum.
-
-To change the initial number of lines, change the SCREEN_LINES setting in
-pigfx_config.h.in and re-compile the kernel.
 
 -----
 
