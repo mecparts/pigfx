@@ -9,6 +9,7 @@
 #include "dma.h"
 #include "nmalloc.h"
 #include "ee_printf.h"
+#include "../uspi/env/include/uspienv/types.h"
 #include "../uspi/include/uspi.h"
 
 
@@ -127,7 +128,7 @@ static void rotate_baudrate()
 
   gfx_term_putstring("\r\x1b[2K[Terminal at ");
   gfx_term_putstring(u2s(baud[i]));
-  gfx_term_putstring(" baud]\n");
+  gfx_term_putstring(" baud]\r\n");
   uart0_setbaud(baud[i]);
 }
 
@@ -148,7 +149,7 @@ static void _keypress_handler(const char* str )
 
 	 // special casees: print screen clears screen, F12 toggles font
 	 if( ch == 0xFF ) 
-	   { gfx_term_putstring("\x1b[2J"); ch = 0; }
+	   { gfx_term_putstring("\x1b[2J\x1b[32m"); ch = 0; }
 	 else if( ch == 0xFE )
 	   { gfx_toggle_font_height(); ch = 0; }
 	 else if( ch == 0xFD )
@@ -472,6 +473,7 @@ void term_main_loop()
 
     while(1)
     {
+        USPiKeyboardUpdateLEDs();
         if( !DMA_CHAN0_BUSY && uart_buffer_start != uart_buffer_end )
         {
             strb[0] = *uart_buffer_start++;
@@ -521,53 +523,62 @@ void entry_point()
 
     gfx_term_putstring( "\x1B[2J" ); // Clear screen
 
-    //gfx_set_bg(27);
+    gfx_term_reset_attrib();
+    
+    //gfx_set_bg(BLUE);
     //gfx_term_putstring( "\x1B[2K" ); // Render blue line at top
-    //ee_printf(" ===  PiGFX ===  v.%s\n", PIGFX_VERSION );
+		//gfx_set_fg(YELLOW);// bright yellow
+    //ee_printf(" ===  PiGFX ===  v.%d.%d.%d ===  Build %s\r\n", PIGFX_MAJVERSION, PIGFX_MINVERSION, PIGFX_BUILDVERSION, PIGFX_VERSION  );
     //gfx_term_putstring( "\x1B[2K" );
-    //gfx_term_putstring( "\x1B[2K" ); 
-    //ee_printf(" Copyright (c) 2016 Filippo Bergamasco\n\n");
-    //gfx_set_bg(0);
+    //ee_printf(" Copyright (c) 2016 Filippo Bergamasco\r\n\r\n");
+    //gfx_set_bg(BLACK);
+    //gfx_set_fg(DARKGRAY);
 
     timers_init();
     attach_timer_handler( HEARTBEAT_FREQUENCY, _heartbeat_timer_handler, 0, 0 );
 
     initialize_uart_irq();
 
-    //video_test();
-    //video_line_test();
-
+//    video_test();
+//    video_line_test();
 
 #if 1
-    //ee_printf("Initializing USB\n");
+    //gfx_set_bg(BLUE);
+    //gfx_set_fg(YELLOW);
+    //ee_printf("Initializing USB: ");
+    //gfx_set_bg(BLACK);
+    //gfx_set_fg(GRAY);
 
     if( USPiInitialize() )
     {
-      //ee_printf("Initialization OK!\n");
-      //ee_printf("Checking for keyboards...\n");
+      //ee_printf("Initialization OK!\r\n");
+      //ee_printf("Checking for keyboards...\r\n");
 
         if ( USPiKeyboardAvailable () )
         {
             USPiKeyboardRegisterKeyPressedHandler( _keypress_handler );
-            gfx_set_fg(10);
-            //ee_printf("Keyboard found.\n");
-            gfx_set_fg(7);
+            //gfx_set_fg(GREEN);
+            //ee_printf("Keyboard found.\r\n");
+            //gfx_set_fg(GRAY);
         }
         else
         {
-            gfx_set_fg(9);
-            ee_printf("No keyboard found.\n");
-            gfx_set_fg(15);
+            gfx_set_fg(RED);
+            ee_printf("No keyboard found.\r\n");
+            gfx_set_fg(GRAY);
         }
     }
 
-    else ee_printf("USB initialization failed.\n");
+    else
+		{
+			gfx_set_fg(RED);
+			ee_printf("USB initialization failed.\r\n");
+		}
 #endif
 
-    ee_printf("---------\n");
+    //ee_printf("---------\r\n");
 
 
     gfx_term_reset_attrib();
-    gfx_set_fg(7);
     term_main_loop();
 }

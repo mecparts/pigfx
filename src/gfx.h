@@ -1,6 +1,7 @@
 #ifndef _GFX_H_
 #define _GFX_H_
 
+#include "gfx_types.h"
 
 typedef unsigned char GFX_COL;
 

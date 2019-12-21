@@ -154,7 +154,7 @@ void gfx_toggle_lines()
   if( ctx.line_limit<16 ) ctx.line_limit = ctx.full_height/ctx.font_height;
   
   gfx_set_screen_geometry();
-  gfx_term_putstring("["); gfx_term_putstring(u2s(ctx.line_limit)); gfx_term_putstring(" lines]\n");
+  gfx_term_putstring("["); gfx_term_putstring(u2s(ctx.line_limit)); gfx_term_putstring(" lines]\r\n");
 }
 
 
@@ -198,8 +198,8 @@ void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, 
 
 void gfx_term_reset_attrib()
 {
-  gfx_set_bg(0);
-  gfx_set_fg(7);
+  gfx_set_bg(BLACK);
+  gfx_set_fg(DARKGREEN);
   ctx.inverse = 0;
 }
 
@@ -311,8 +311,42 @@ void gfx_scroll_up( unsigned int npixels )
     // Fill with bg at the top
     const unsigned int BG = GET_BG32(ctx);
 
-     while( pf_dst >= pfb_end )
+    while( pf_dst >= pfb_end )
         *pf_dst-- = BG;
+}
+
+
+void gfx_delete_line( unsigned int row )
+{
+    unsigned int* pf_dst = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*row);
+    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*(row+1));
+    const unsigned int* const pfb_end = (unsigned int*)( ctx.pfb + ctx.size );
+
+    while( pf_src < pfb_end )
+        *pf_dst++ = *pf_src++;
+
+    // Fill with bg at the bottom
+    const unsigned int BG = GET_BG32(ctx);
+    while( pf_dst < pfb_end )
+        *pf_dst++ = BG;
+}
+
+
+void gfx_insert_line( unsigned int row )
+{
+    unsigned int* pf_dst = (unsigned int*)( ctx.pfb + ctx.size ) -1;
+    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.size - ctx.Pitch*ctx.font_height) -1;
+    const unsigned int* const pfb_end = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*row);
+
+    while( pf_src >= pfb_end )
+        *pf_dst-- = *pf_src--;
+
+    // Fill with bg at the row
+    const unsigned int BG = GET_BG32(ctx);
+
+    ++pf_src;
+    while( pf_src <= pf_dst )
+        *pf_src++ = BG;
 }
 
 
@@ -353,7 +387,7 @@ void gfx_fill_rect( unsigned int x, unsigned int y, unsigned int width, unsigned
         const unsigned char* const pfb_end = pf + width;
 
         while( pf < pfb_end )
-	  *pf++ = GET_FG(ctx);
+          *pf++ = GET_FG(ctx);
 
         ++y;
     }
@@ -400,7 +434,7 @@ void gfx_line( int x0, int y0, int x1, int y1 )
         pfb = PFB(y0,x0);
         while(nr--)
         {
-  	    *pfb = GET_FG(ctx);
+              *pfb = GET_FG(ctx);
             error = error - deltay;
             if( error < 0 )
             {
@@ -416,7 +450,7 @@ void gfx_line( int x0, int y0, int x1, int y1 )
         pfb = PFB(x0,y0);
         while(nr--)
         {
-  	    *pfb = GET_FG(ctx);
+              *pfb = GET_FG(ctx);
             error = error - deltay;
             if( error < 0 )
             {
@@ -497,32 +531,32 @@ void gfx_term_render_cursor()
     if( ctx.term.cursor_visible )
       while(h--)
         {
-	  //*pb++ = *pfb; *pfb = ~*pfb; pfb++;
-	  //*pb++ = *pfb; *pfb = ~*pfb; pfb++;
-	  *pb++ = *pfb;
-	  p = (unsigned char *) pfb;
-	  p[0] = (p[0]==ctx.fg) ? ctx.bg : ((p[0]==ctx.bg) ? ctx.fg : ~p[0]);
-          p[1] = (p[1]==ctx.fg) ? ctx.bg : ((p[1]==ctx.bg) ? ctx.fg : ~p[1]);
-	  p[2] = (p[2]==ctx.fg) ? ctx.bg : ((p[2]==ctx.bg) ? ctx.fg : ~p[2]);
-	  p[3] = (p[3]==ctx.fg) ? ctx.bg : ((p[3]==ctx.bg) ? ctx.fg : ~p[3]);
-	  pfb++;
-
-	  *pb++ = *pfb;
+          //*pb++ = *pfb; *pfb = ~*pfb; pfb++;
+          //*pb++ = *pfb; *pfb = ~*pfb; pfb++;
+          *pb++ = *pfb;
           p = (unsigned char *) pfb;
           p[0] = (p[0]==ctx.fg) ? ctx.bg : ((p[0]==ctx.bg) ? ctx.fg : ~p[0]);
           p[1] = (p[1]==ctx.fg) ? ctx.bg : ((p[1]==ctx.bg) ? ctx.fg : ~p[1]);
           p[2] = (p[2]==ctx.fg) ? ctx.bg : ((p[2]==ctx.bg) ? ctx.fg : ~p[2]);
           p[3] = (p[3]==ctx.fg) ? ctx.bg : ((p[3]==ctx.bg) ? ctx.fg : ~p[3]);
-	  pfb++;
+          pfb++;
 
-	  pfb+=stride;
+          *pb++ = *pfb;
+          p = (unsigned char *) pfb;
+          p[0] = (p[0]==ctx.fg) ? ctx.bg : ((p[0]==ctx.bg) ? ctx.fg : ~p[0]);
+          p[1] = (p[1]==ctx.fg) ? ctx.bg : ((p[1]==ctx.bg) ? ctx.fg : ~p[1]);
+          p[2] = (p[2]==ctx.fg) ? ctx.bg : ((p[2]==ctx.bg) ? ctx.fg : ~p[2]);
+          p[3] = (p[3]==ctx.fg) ? ctx.bg : ((p[3]==ctx.bg) ? ctx.fg : ~p[3]);
+          pfb++;
+
+          pfb+=stride;
         }
     else
       while(h--)
         {
-	  *pb++ = *pfb++;
-	  *pb++ = *pfb++;
-	  pfb+=stride;
+          *pb++ = *pfb++;
+          *pb++ = *pfb++;
+          pfb+=stride;
         }
 }
 
@@ -561,7 +595,7 @@ void gfx_term_putstring( const char* str )
             case '\n':
                 gfx_restore_cursor_content();
                 ++ctx.term.cursor_row;
-                ctx.term.cursor_col = 0;
+                //ctx.term.cursor_col = 0;
                 gfx_term_render_cursor();
                 break;
 
@@ -584,10 +618,10 @@ void gfx_term_putstring( const char* str )
                 }
                 break;
 
-   	    case 0x0e: // skip shift out
-	    case 0x0f: // skip shift in
-	    case 0x07: // skip BELL
-	      break;
+                 case 0x0e: // skip shift out
+                 case 0x0f: // skip shift in
+                 case 0x07: // skip BELL
+                     break;
 
             case 0x0c:
                 /* new page */
@@ -697,7 +731,7 @@ void gfx_term_clear_lines(int from, int to)
 
 
 /*
- *  Term ansii codes scanner
+ *  Term ANSI codes scanner
  *
  */
 #define TERM_ESCAPE_CHAR (0x1B)
@@ -709,38 +743,31 @@ void gfx_term_clear_lines(int from, int to)
 
 void state_fun_final_letter( char ch, scn_state *state )
 {
-    if( state->private_mode_char == '#' )
-    {
+    if( state->private_mode_char == '#' ) {
         // Non-standard ANSI Codes
-        switch( ch )
-        {
+        switch( ch ) {
             case 'l':
-                /* render line */
-                if( state->cmd_params_size == 4 )
-                {
+                // render line
+                if( state->cmd_params_size == 4 ) {
                     gfx_line( state->cmd_params[0], state->cmd_params[1], state->cmd_params[2], state->cmd_params[3] );
                 }
-            goto back_to_normal;
-            break;
+                goto back_to_normal;
+                break;
             case 'r':
-                /* render a filled rectangle */
-                if( state->cmd_params_size == 4 )
-                {
+                // render a filled rectangle
+                if( state->cmd_params_size == 4 ) {
                     gfx_fill_rect( state->cmd_params[0], state->cmd_params[1], state->cmd_params[2], state->cmd_params[3] );
                 }
-            goto back_to_normal;
-            break;
+                goto back_to_normal;
+                break;
         }
-
     }
 
-    switch( ch )
-    {
+    switch( ch ) {
         case 'l':
             if( state->private_mode_char == '?' &&
                 state->cmd_params_size == 1 &&
-                state->cmd_params[0] == 25 )
-            {
+                state->cmd_params[0] == 25 ) {
                 gfx_term_set_cursor_visibility(0);
                 gfx_restore_cursor_content();
             }
@@ -750,8 +777,7 @@ void state_fun_final_letter( char ch, scn_state *state )
         case 'h':
             if( state->private_mode_char == '?' &&
                 state->cmd_params_size == 1 &&
-                state->cmd_params[0] == 25 )
-            {
+                state->cmd_params[0] == 25 ) {
                 gfx_term_set_cursor_visibility(1);
                 gfx_term_render_cursor();
             }
@@ -759,15 +785,11 @@ void state_fun_final_letter( char ch, scn_state *state )
             break;
 
         case 'K':
-  	  if( state->cmd_params_size== 0 )
-            {
-	      gfx_term_clear_till_end();
-	      goto back_to_normal;
- 	    }
-	  else if( state->cmd_params_size== 1 )
-            {
-                switch(state->cmd_params[0] )
-                {
+            if( state->cmd_params_size== 0 ) {
+                gfx_term_clear_till_end();
+                goto back_to_normal;
+            } else if( state->cmd_params_size== 1 ) {
+                switch( state->cmd_params[0] ) {
                     case 0:
                         gfx_term_clear_till_end();
                         goto back_to_normal;
@@ -785,110 +807,117 @@ void state_fun_final_letter( char ch, scn_state *state )
             break;
 
         case 'J':
-	  {
-	    switch( state->cmd_params_size>=1 ? state->cmd_params[0] : 0 )
-	      {
-	      case 0:
-		gfx_term_clear_lines(ctx.term.cursor_row, ctx.term.HEIGHT-1);
-		break;
+            switch( state->cmd_params_size>=1 ? state->cmd_params[0] : 0 ) {
+                case 0:
+                    gfx_term_clear_lines(ctx.term.cursor_row, ctx.term.HEIGHT-1);
+                    break;
 
-	      case 1:
-		gfx_term_clear_lines(0, ctx.term.cursor_row);
-		break;
+                case 1:
+                    gfx_term_clear_lines(0, ctx.term.cursor_row);
+                    break;
 
-	      case 2:
-		gfx_term_move_cursor(0, 0);
-                gfx_term_clear_screen();
-		break;
-	      }
+                case 2:
+                    gfx_term_move_cursor(0, 0);
+                    gfx_term_clear_screen();
+                    break;
+            }
 
             goto back_to_normal;
             break;
-	  }
 
         case 'A':
-	  {
-            int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
-	    gfx_term_move_cursor(MAX(0,(int) ctx.term.cursor_row-n), ctx.term.cursor_col);
-            goto back_to_normal;
-            break;
-	  }
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_term_move_cursor(MAX(0,(int) ctx.term.cursor_row-n), ctx.term.cursor_col);
+                goto back_to_normal;
+                break;
+            }
 
         case 'B':
-	  {
-            int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
-	    gfx_term_move_cursor(MIN((int) ctx.term.HEIGHT-1, (int) ctx.term.cursor_row+n), ctx.term.cursor_col);
-            goto back_to_normal;
-            break;
-	  }
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_term_move_cursor(MIN((int) ctx.term.HEIGHT-1, (int) ctx.term.cursor_row+n), ctx.term.cursor_col);
+                goto back_to_normal;
+                break;
+            }
 
         case 'C':
-	  {
-            int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
-	    gfx_term_move_cursor(ctx.term.cursor_row, MIN((int) ctx.term.WIDTH-1, (int) ctx.term.cursor_col+n));
-            goto back_to_normal;
-            break;
-	  }
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_term_move_cursor(ctx.term.cursor_row, MIN((int) ctx.term.WIDTH-1, (int) ctx.term.cursor_col+n));
+                goto back_to_normal;
+                break;
+            }
 
         case 'D':
-	  {
-            int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
-	    gfx_term_move_cursor(ctx.term.cursor_row, MAX(0, (int) ctx.term.cursor_col-n));
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_term_move_cursor(ctx.term.cursor_row, MAX(0, (int) ctx.term.cursor_col-n));
+                goto back_to_normal;
+                break;
+            }
+
+        case 'M':
+            // delete line
+            gfx_delete_line(ctx.term.cursor_row);
+            gfx_term_render_cursor();
             goto back_to_normal;
             break;
-	  }
+
+        case 'L':
+            // insert line
+            gfx_restore_cursor_content();
+            gfx_insert_line(ctx.term.cursor_row);
+            gfx_term_render_cursor();
+            goto back_to_normal;
+            break;
 
         case 'm':
-	  {
-	    if( state->cmd_params_size==0 )
-	      gfx_term_reset_attrib();
-	    else
-	      {
-		unsigned int i;
-		for(i=0; i<state->cmd_params_size; i++)
-		  {
-		    if( i+2 < state->cmd_params_size && state->cmd_params[i]==38 && state->cmd_params[i+1]==5 )
-		      { i+=2; ctx.fg = state->cmd_params[i]; }
-		    else if( i+2 < state->cmd_params_size && state->cmd_params[i]==48 && state->cmd_params[i+1]==5 )
-		      { i+=2; ctx.bg = state->cmd_params[i]; }
-		    else
-		      {
-			int p = state->cmd_params[i];
-			if( p==0 )
-			  gfx_term_reset_attrib();
-			else if( p==1 )
-			  ctx.fg |= 8;
-			else if( p==2 )
-			  ctx.fg &= 7;
-			else if( p==3 || p==7 )
-			  ctx.inverse = 1;
-			else if( p==27 )
-			  ctx.inverse = 0;
-			else if( p>=30 && p<=37 )
-			  ctx.fg = (ctx.fg&8) | (p-30);
-			else if( p==39 )
-			  ctx.fg = 15;
-			else if( p>=40 && p<=47 )
-			  gfx_set_bg(p-40);
-			else if( p==49 )
-			  gfx_set_bg(7);
-		      }
-		  }
-		}
-
-	    goto back_to_normal;
+            if( state->cmd_params_size==0 ) {
+                gfx_term_reset_attrib();
+            } else {
+                unsigned int i;
+                for(i=0; i<state->cmd_params_size; i++) {
+                    if( i+2 < state->cmd_params_size && state->cmd_params[i]==38 && state->cmd_params[i+1]==5 ) {
+                        i+=2; ctx.fg = state->cmd_params[i]; 
+                    } else if( i+2 < state->cmd_params_size && state->cmd_params[i]==48 && state->cmd_params[i+1]==5 ){
+                        i+=2; ctx.bg = state->cmd_params[i]; 
+                    } else {
+                        int p = state->cmd_params[i];
+                        if( p==0 ) {
+                            gfx_term_reset_attrib();
+                        } else if( p==1 ) {
+                            ctx.fg |= 8;
+                        } else if( p==2 ) {
+                            ctx.fg &= 7;
+                        } else if( p==3 || p==7 ) {
+                            ctx.inverse = 1;
+                        } else if( p==27 ) {
+                            ctx.inverse = 0;
+                        } else if( p>=30 && p<=37 ) {
+                            ctx.fg = (ctx.fg&8) | (p-30);
+                        } else if( p==39 ) {
+                            ctx.fg = 15;
+                        } else if( p>=40 && p<=47 ) {
+                            gfx_set_bg(p-40);
+                        } else if( p==49 ) {
+                            gfx_set_bg(7);
+                        }
+                    }
+                }
+            }
+            goto back_to_normal;
             break;
-	  }
 
         case 'f':
         case 'H':
-	  {
-	    int r = state->cmd_params_size<1 ? 1 : state->cmd_params[0];
-            int c = state->cmd_params_size<2 ? 1 : state->cmd_params[1];
-	    gfx_term_move_cursor(r-1, c-1);
-            goto back_to_normal;
-            break;
-	  }
+            {
+                int r = state->cmd_params_size<1 ? 1 : state->cmd_params[0];
+                int c = state->cmd_params_size<2 ? 1 : state->cmd_params[1];
+                gfx_term_move_cursor(r-1, c-1);
+                goto back_to_normal;
+                break;
+            }
 
         case 's':
             gfx_term_save_cursor();
@@ -901,69 +930,58 @@ void state_fun_final_letter( char ch, scn_state *state )
             break;
 
         case 'c':
-	  {
-	    if( state->cmd_params_size == 0 || state->cmd_params[0]==0 )
-	      {
-		// according to: https://geoffg.net/Downloads/Terminal/VT100_User_Guide.pdf
-		// query terminal type, respond "ESC [?1;Nc" where N is:
-		// 0: Base VT100, no options
-		// 1: Preprocessor option (STP)
-		// 2: Advanced video option (AVO)
-		// 3: AVO and STP
-		// 4: Graphics processor option (GO)
-		// 5: GO and STP
-		// 6: GO and AVO
-		// 7: GO, STP, and AVO
-		char buf[7];
-		buf[0] = '\033';
-		buf[1] = '[';
-		buf[2] = '?';
-		buf[3] = '1';
-		buf[4] = ';';
-		buf[5] = '0';
-		buf[6] = 'c';
-		uart_write(buf, 7);
-	      }
-	    goto back_to_normal;
-	    break;
-	  }
-
-        case 'n':
-	  {
-	    char buf[20];
-	    if( state->cmd_params_size == 1 )
-	      {
- 		if( state->cmd_params[0] == 5 )
-		  {
-		    // query terminal status (always responde OK)
-                    buf[0] = '\033';
-                    buf[1] = '[';
-		    buf[2] = '0';
-		    buf[3] = 'n';
-		    uart_write(buf, 4);
- 		  }
-		else if( state->cmd_params[0] == 6 )
-		  {
-		    // query cursor position
-		    buf[0] = '\033';
-		    buf[1] = '[';
-		    b2s(buf+2, (unsigned char) ctx.term.cursor_row+1);
-		    buf[5] = ';';
-		    b2s(buf+6, (unsigned char) ctx.term.cursor_col+1);
-		    buf[9] = 'R';
-		    uart_write(buf, 10);
-		  }
-	      }
-
-	    goto back_to_normal;
-	    break;
-	  }
-
-        case '?':
-	  {
+            if( state->cmd_params_size == 0 || state->cmd_params[0]==0 ) {
+                // according to: https://geoffg.net/Downloads/Terminal/VT100_User_Guide.pdf
+                // query terminal type, respond "ESC [?1;Nc" where N is:
+                // 0: Base VT100, no options
+                // 1: Preprocessor option (STP)
+                // 2: Advanced video option (AVO)
+                // 3: AVO and STP
+                // 4: Graphics processor option (GO)
+                // 5: GO and STP
+                // 6: GO and AVO
+                // 7: GO, STP, and AVO
+                char buf[7];
+                buf[0] = '\033';
+                buf[1] = '[';
+                buf[2] = '?';
+                buf[3] = '1';
+                buf[4] = ';';
+                buf[5] = '0';
+                buf[6] = 'c';
+                uart_write(buf, 7);
+            }
             goto back_to_normal;
             break;
- 	  }
+
+        case 'n':
+            if( state->cmd_params_size == 1 ) {
+                char buf[20];
+                if( state->cmd_params[0] == 5 ) {
+                    // query terminal status (always responde OK)
+                    buf[0] = '\033';
+                    buf[1] = '[';
+                    buf[2] = '0';
+                    buf[3] = 'n';
+                    uart_write(buf, 4);
+                } else if( state->cmd_params[0] == 6 ) {
+                    // query cursor position
+                    buf[0] = '\033';
+                    buf[1] = '[';
+                    b2s(buf+2, (unsigned char) ctx.term.cursor_row+1);
+                    buf[5] = ';';
+                    b2s(buf+6, (unsigned char) ctx.term.cursor_col+1);
+                    buf[9] = 'R';
+                    uart_write(buf, 10);
+                }
+            }
+
+            goto back_to_normal;
+            break;
+
+        case '?':
+            goto back_to_normal;
+            break;
 
         default:
             goto back_to_normal;
@@ -977,16 +995,14 @@ back_to_normal:
 
 void state_fun_read_digit( char ch, scn_state *state )
 {
-    if( ch>='0' && ch <= '9' )
-    {
+    if( ch>='0' && ch <= '9' ) {
         // parse digit
         state->cmd_params[ state->cmd_params_size - 1] = state->cmd_params[ state->cmd_params_size - 1]*10 + (ch-'0');
         state->next = state_fun_read_digit; // stay on this state
         return;
     }
 
-    if( ch == ';' )
-    {
+    if( ch == ';' ) {
         // Another param will follow
         state->cmd_params_size++;
         state->cmd_params[ state->cmd_params_size-1 ] = 0;
@@ -1000,26 +1016,20 @@ void state_fun_read_digit( char ch, scn_state *state )
 
 void state_fun_selectescape( char ch, scn_state *state )
 {
-    if( ch>='0' && ch<='9' )
-    {
+    if( ch>='0' && ch<='9' ) {
         // start of a digit
         state->cmd_params_size = 1;
         state->cmd_params[ 0 ] = ch-'0';
         state->next = state_fun_read_digit;
         return;
-    }
-    else
-    {
-        if( ch=='?' || ch=='#' )
-        {
-            state->private_mode_char = ch;
+    } else if( ch=='?' || ch=='#' ) {
+        state->private_mode_char = ch;
 
-            // A digit will follow
-            state->cmd_params_size = 1;
-            state->cmd_params[ 0 ] = 0;
-            state->next = state_fun_read_digit;
-            return;
-        }
+        // A digit will follow
+        state->cmd_params_size = 1;
+        state->cmd_params[ 0 ] = 0;
+        state->next = state_fun_read_digit;
+        return;
     }
 
     // Already at the final letter
@@ -1029,34 +1039,28 @@ void state_fun_selectescape( char ch, scn_state *state )
 
 void state_fun_waitsquarebracket( char ch, scn_state *state )
 {
-    if( ch=='[' )
-    {
+    if( ch=='[' ) {
         state->cmd_params[0]=1;
-        state->private_mode_char=0; /* reset private mode char */
+        state->private_mode_char=0; // reset private mode char
         state->next = state_fun_selectescape;
         return;
-    }
-    else if( ch==TERM_ESCAPE_CHAR ) // Double ESCAPE prints the ESC character
-    {
+    } else if( ch==TERM_ESCAPE_CHAR ) { // Double ESCAPE prints the ESC character
         gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, ch );
         ++ctx.term.cursor_col;
         gfx_term_render_cursor();
-    }
-    else if( ch=='c' )
-      {
-	// ESC-c resets terminal
+    } else if( ch=='c' ) {
+        // ESC-c resets terminal
         gfx_term_reset_attrib();
- 	gfx_term_move_cursor(0,0);
-	gfx_term_clear_screen();
-      }
+        gfx_term_move_cursor(0,0);
+        gfx_term_clear_screen();
+    }
 
     state->next = state_fun_normaltext;
 }
 
 void state_fun_normaltext( char ch, scn_state *state )
 {
-    if( ch==TERM_ESCAPE_CHAR )
-    {
+    if( ch==TERM_ESCAPE_CHAR ) {
         state->next = state_fun_waitsquarebracket;
         return;
     }

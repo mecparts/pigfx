@@ -41,14 +41,14 @@ unsigned StartKernelTimer (unsigned nHzDelay,	// in HZ units (see "system config
 
 void CancelKernelTimer (unsigned hTimer)
 {
-    //ee_printf("* CancelKernelTimer *\n");
+    //ee_printf("* CancelKernelTimer *\r\n");
   detach_timer_handler(hTimer);
 }
 
 
 void ConnectInterrupt (unsigned nIRQ, TInterruptHandler *pHandler, void *pParam)
 {
-    //ee_printf("* ConnectInterrupt * IRQ: %d \n", nIRQ);
+    //ee_printf("* ConnectInterrupt * IRQ: %d \r\n", nIRQ);
     irq_attach_handler( nIRQ, pHandler, pParam );
 }
 
@@ -66,7 +66,7 @@ int SetPowerStateOn (unsigned nDeviceId)	// "set power state" to "on", wait unti
 
 int GetMACAddress (unsigned char Buffer[6])	// "get board MAC address"
 {
-    //ee_printf("* GetMacAddress *\n");
+    //ee_printf("* GetMacAddress *\r\n");
 
     if( RHW_SUCCESS != rhw_get_mac_address( Buffer ) )
         return 0;
@@ -77,7 +77,7 @@ int GetMACAddress (unsigned char Buffer[6])	// "get board MAC address"
 
 void uspi_assertion_failed (const char *pExpr, const char *pFile, unsigned nLine)
 {
-    ee_printf("ASSERTION FAILED: %s, in %s (Line %d)\n", pExpr, pFile, nLine);
+    ee_printf("ASSERTION FAILED: %s, in %s (Line %d)\r\n", pExpr, pFile, nLine);
 
     while(1)
         usleep(1000000);
@@ -86,7 +86,7 @@ void uspi_assertion_failed (const char *pExpr, const char *pFile, unsigned nLine
 
 void DebugHexdump (const void *pBuffer, unsigned nBufLen, const char *pSource /* = 0 */)
 {
-  ee_printf("Memory dump of %s:\n", pSource );
+  ee_printf("Memory dump of %s:\r\n", pSource );
     uart_dump_mem( (unsigned char*)pBuffer, (unsigned char*)( pBuffer ) + nBufLen );
 }
 
