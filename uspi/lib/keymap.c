@@ -2,7 +2,7 @@
 // keymap.c
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2016  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 {
 	" ",			// KeySpace
 	"\x1b",			// KeyEscape
-	"\x7f",			// KeyBackspace
+	"\b",			// KeyBackspace
 	"\t",			// KeyTabulator
 	"\r",			// KeyReturn
 	"\x1b[2~",		// KeyInsert
@@ -58,7 +58,7 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 	"\xfe",			// KeyF12
 	0,			// KeyApplication
 	0,			// KeyCapsLock
-	"\xff",		        // KeyPrintScreen
+	"\xff",	// KeyPrintScreen
 	0,			// KeyScrollLock
 	0,			// KeyPause
 	0,			// KeyNumLock
@@ -79,19 +79,31 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 	"0",			// KeyKP_0
 	"\x1b[G",		// KeyKP_Center
 	",",			// KeyKP_Comma
-	"."			// KeyKP_Period
+	".",			// KeyKP_Period
+	"\x1b[1;5A",// KeyCtrlUp
+	"\x1b[1;5B",// KeyCtrlDown
+	"\x1b[1;5D",// KeyCtrlLeft
+	"\x1b[1;5C"	// KeyCtrlRight
 };
 
-static const u8 s_DefaultMap[PHY_MAX_CODE+1][K_ALTTAB+1] =
+#define C(chr)		((u16) (u8) (chr))
+
+static const u16 s_DefaultMap[PHY_MAX_CODE+1][K_ALTSHIFTTAB+1] =
 {
-#if defined (USPI_DEFAULT_KEYMAP_US)
-        #include "keymap_us.h"
+#if defined (USPI_DEFAULT_KEYMAP_DE)
+	#include "keymap_de.h"
+#elif defined (USPI_DEFAULT_KEYMAP_ES)
+	#include "keymap_es.h"
+#elif defined (USPI_DEFAULT_KEYMAP_FR)
+	#include "keymap_fr.h"
+#elif defined (USPI_DEFAULT_KEYMAP_IT)
+	#include "keymap_it.h"
 #elif defined (USPI_DEFAULT_KEYMAP_UK)
 	#include "keymap_uk.h"
-#elif defined (USPI_DEFAULT_KEYMAP_DE)
-	#include "keymap_de.h"
+#elif defined (USPI_DEFAULT_KEYMAP_US)
+	#include "keymap_us.h"
 #else
-	{KeyNone}		// ...
+	{KeyNone}
 #endif
 };
 
@@ -115,7 +127,7 @@ boolean KeyMapClearTable (TKeyMap *pThis, u8 nTable)
 {
 	assert (pThis != 0);
 
-	if (nTable > K_ALTTAB)
+	if (nTable > K_ALTSHIFTTAB)
 	{
 		return FALSE;
 	}
@@ -128,11 +140,11 @@ boolean KeyMapClearTable (TKeyMap *pThis, u8 nTable)
 	return TRUE;
 }
 
-boolean KeyMapSetEntry (TKeyMap *pThis, u8 nTable, u8 nPhyCode, u8 nValue)
+boolean KeyMapSetEntry (TKeyMap *pThis, u8 nTable, u8 nPhyCode, u16 nValue)
 {
 	assert (pThis != 0);
 
-	if (   nTable   > K_ALTTAB
+	if (   nTable   > K_ALTSHIFTTAB
 	    || nPhyCode == 0
 	    || nPhyCode > PHY_MAX_CODE
 	    || nValue   >= KeyMaxCode)
@@ -145,7 +157,7 @@ boolean KeyMapSetEntry (TKeyMap *pThis, u8 nTable, u8 nPhyCode, u8 nValue)
 	return TRUE;
 }
 
-u8 KeyMapTranslate (TKeyMap *pThis, u8 nPhyCode, u8 nModifiers)
+u16 KeyMapTranslate (TKeyMap *pThis, u8 nPhyCode, u8 nModifiers)
 {
 	assert (pThis != 0);
 
@@ -155,7 +167,7 @@ u8 KeyMapTranslate (TKeyMap *pThis, u8 nPhyCode, u8 nModifiers)
 		return KeyNone;
 	}
 
-	u8 nLogCodeNorm = pThis->m_KeyMap[nPhyCode][K_NORMTAB];
+	u16 nLogCodeNorm = pThis->m_KeyMap[nPhyCode][K_NORMTAB];
 
 	if (   nLogCodeNorm == KeyDelete
 	    && (nModifiers & (LCTRL | RCTRL))
@@ -187,14 +199,21 @@ u8 KeyMapTranslate (TKeyMap *pThis, u8 nPhyCode, u8 nModifiers)
 	}
 	else if (nModifiers & ALTGR)
 	{
-		nTable = K_ALTTAB;
+		if (nModifiers & (LSHIFT | RSHIFT))
+		{
+			nTable = K_ALTSHIFTTAB;
+		}
+		else
+		{
+			nTable = K_ALTTAB;
+		}
 	}
 	else if (nModifiers & (LSHIFT | RSHIFT))
 	{
 		nTable = K_SHIFTTAB;
 	}
 
-	u8 nLogCode = pThis->m_KeyMap[nPhyCode][nTable];
+	u16 nLogCode = pThis->m_KeyMap[nPhyCode][nTable];
 
 	switch (nLogCode)
 	{
@@ -214,7 +233,7 @@ u8 KeyMapTranslate (TKeyMap *pThis, u8 nPhyCode, u8 nModifiers)
 	return nLogCode;
 }
 
-const char *KeyMapGetString (TKeyMap *pThis, u8 nKeyCode, u8 nModifiers, char Buffer[2])
+const char *KeyMapGetString (TKeyMap *pThis, u16 nKeyCode, u8 nModifiers, char Buffer[2])
 {
 	assert (pThis != 0);
 
@@ -226,6 +245,15 @@ const char *KeyMapGetString (TKeyMap *pThis, u8 nKeyCode, u8 nModifiers, char Bu
 
 	if (KeySpace <= nKeyCode && nKeyCode < KeyMaxCode)
 	{
+      if (nModifiers & (LCTRL | RCTRL)) {
+          if (KeyUp <= nKeyCode && nKeyCode <= KeyRight) {
+              nKeyCode += KeyCtrlUp-KeyUp;
+          } else if (nKeyCode == KeyReturn || nKeyCode== KeyKP_Enter) {
+             Buffer[0] = 'J' - '@';
+             Buffer[1] = '\0';
+             return Buffer;
+          }
+      }
 		return s_KeyStrings[nKeyCode-KeySpace];
 	}
 
@@ -233,15 +261,33 @@ const char *KeyMapGetString (TKeyMap *pThis, u8 nKeyCode, u8 nModifiers, char Bu
 		
 	if (nModifiers & (LCTRL | RCTRL))
 	{
-		chChar -= 'a';
-		if ('\0' <= chChar && chChar <= 'z'-'a')
+		if ('a' <= chChar && chChar <= 'z')
 		{
-			Buffer[0] = chChar + 1;
+			Buffer[0] = chChar - 'a' + 1;
 			Buffer[1] = '\0';
 
 			return Buffer;
+		} else if (chChar == '-' || chChar == '_') {
+         Buffer[0] = '_'-'@';
+         Buffer[1] = '\0';
+         
+         return Buffer;
+      } else if (chChar == '[' || chChar == '{') {
+         Buffer[0] = '['-'@';
+         Buffer[1] = '\0';
+         
+         return Buffer;
+      } else if (chChar == ']' || chChar == '}') {
+         Buffer[0] = ']'-'@';
+         Buffer[1] = '\0';
+         
+         return Buffer;
+      } else if (chChar == '\\' || chChar == '|') {
+         Buffer[0] = '\\'-'@';
+         Buffer[1] = '\0';
+         
+         return Buffer;
 		}
-		
 		return 0;
 	}
 

@@ -2,7 +2,7 @@
 // usbkeyboard.c
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2018  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,12 +21,14 @@
 #include <uspi/usbhid.h>
 #include <uspi/usbhostcontroller.h>
 #include <uspi/devicenameservice.h>
+#include <uspi/macros.h>
 #include <uspi/assert.h>
 #include <uspios.h>
 
 #define REPEAT_ENABLE
 
-#define MSEC2HZ(msec)           ((msec) * HZ / 1000)
+#define MSEC2HZ(msec)		((msec) * HZ / 1000)
+
 #define REPEAT_DELAY		MSEC2HZ(500)
 #define REPEAT_RATE		MSEC2HZ(40)
 
@@ -34,7 +36,7 @@ static unsigned s_nDeviceNumber = 1;
 
 static const char FromUSBKbd[] = "usbkbd";
 
-static char USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode);
+static char *USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode);
 static boolean USBKeyboardDeviceStartRequest (TUSBKeyboardDevice *pThis);
 static void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *pContext);
 static u8 USBKeyboardDeviceGetModifiers (TUSBKeyboardDevice *pThis);
@@ -43,22 +45,22 @@ static u8 USBKeyboardDeviceGetKeyCode (TUSBKeyboardDevice *pThis);
 static void USBKeyboardDeviceTimerHandler (unsigned hTimer, void *pParam, void *pContext);
 #endif
 
-void USBKeyboardDevice (TUSBKeyboardDevice *pThis, TUSBDevice *pDevice)
+void USBKeyboardDevice (TUSBKeyboardDevice *pThis, TUSBFunction *pDevice)
 {
 	assert (pThis != 0);
 
-	USBDeviceCopy (&pThis->m_USBDevice, pDevice);
-	pThis->m_USBDevice.Configure = USBKeyboardDeviceConfigure;
+	USBFunctionCopy (&pThis->m_USBFunction, pDevice);
+	pThis->m_USBFunction.Configure = USBKeyboardDeviceConfigure;
 
 	pThis->m_pReportEndpoint = 0;
 	pThis->m_pKeyPressedHandler = 0;
 	pThis->m_pSelectConsoleHandler = 0;
 	pThis->m_pShutdownHandler = 0;
 	pThis->m_pKeyStatusHandlerRaw = 0;
-	pThis->m_pURB = 0;
 	pThis->m_pReportBuffer = 0;
 	pThis->m_ucLastPhyCode = 0;
 	pThis->m_hTimer = 0;
+	pThis->m_ucLastLEDStatus = 0;
 
 	KeyMap (&pThis->m_KeyMap);
 
@@ -84,42 +86,26 @@ void _CUSBKeyboardDevice (TUSBKeyboardDevice *pThis)
 	}
 
 	_KeyMap (&pThis->m_KeyMap);
-	_USBDevice (&pThis->m_USBDevice);
+	_USBFunction (&pThis->m_USBFunction);
 }
 
-boolean USBKeyboardDeviceConfigure (TUSBDevice *pUSBDevice)
+boolean USBKeyboardDeviceConfigure (TUSBFunction *pUSBFunction)
 {
-	TUSBKeyboardDevice *pThis = (TUSBKeyboardDevice *) pUSBDevice;
+	TUSBKeyboardDevice *pThis = (TUSBKeyboardDevice *) pUSBFunction;
 	assert (pThis != 0);
 
-	TUSBConfigurationDescriptor *pConfDesc =
-		(TUSBConfigurationDescriptor *) USBDeviceGetDescriptor (&pThis->m_USBDevice, DESCRIPTOR_CONFIGURATION);
-	if (   pConfDesc == 0
-	    || pConfDesc->bNumInterfaces <  1)
+	if (USBFunctionGetNumEndpoints (&pThis->m_USBFunction) < 1)
 	{
-		USBDeviceConfigurationError (&pThis->m_USBDevice, FromUSBKbd);
+		USBFunctionConfigurationError (&pThis->m_USBFunction, FromUSBKbd);
 
 		return FALSE;
 	}
 
-	TUSBInterfaceDescriptor *pInterfaceDesc;
-	while ((pInterfaceDesc = (TUSBInterfaceDescriptor *) USBDeviceGetDescriptor (&pThis->m_USBDevice, DESCRIPTOR_INTERFACE)) != 0)
+	TUSBEndpointDescriptor *pEndpointDesc;
+	while ((pEndpointDesc = (TUSBEndpointDescriptor *)
+			USBFunctionGetDescriptor (&pThis->m_USBFunction, DESCRIPTOR_ENDPOINT)) != 0)
 	{
-		if (   pInterfaceDesc->bNumEndpoints	  <  1
-		    || pInterfaceDesc->bInterfaceClass	  != 0x03	// HID Class
-		    || pInterfaceDesc->bInterfaceSubClass != 0x01	// Boot Interface Subclass
-		    || pInterfaceDesc->bInterfaceProtocol != 0x01)	// Keyboard
-		{
-			continue;
-		}
-
-		pThis->m_ucInterfaceNumber  = pInterfaceDesc->bInterfaceNumber;
-		pThis->m_ucAlternateSetting = pInterfaceDesc->bAlternateSetting;
-
-		TUSBEndpointDescriptor *pEndpointDesc =
-			(TUSBEndpointDescriptor *) USBDeviceGetDescriptor (&pThis->m_USBDevice, DESCRIPTOR_ENDPOINT);
-		if (   pEndpointDesc == 0
-		    || (pEndpointDesc->bEndpointAddress & 0x80) != 0x80		// Input EP
+		if (   (pEndpointDesc->bEndpointAddress & 0x80) != 0x80		// Input EP
 		    || (pEndpointDesc->bmAttributes     & 0x3F)	!= 0x03)	// Interrupt EP
 		{
 			continue;
@@ -128,49 +114,38 @@ boolean USBKeyboardDeviceConfigure (TUSBDevice *pUSBDevice)
 		assert (pThis->m_pReportEndpoint == 0);
 		pThis->m_pReportEndpoint = malloc (sizeof (TUSBEndpoint));
 		assert (pThis->m_pReportEndpoint != 0);
-		USBEndpoint2 (pThis->m_pReportEndpoint, &pThis->m_USBDevice, pEndpointDesc);
+		USBEndpoint2 (pThis->m_pReportEndpoint, USBFunctionGetDevice (&pThis->m_USBFunction), pEndpointDesc);
 
 		break;
 	}
 
 	if (pThis->m_pReportEndpoint == 0)
 	{
-		USBDeviceConfigurationError (&pThis->m_USBDevice, FromUSBKbd);
+		USBFunctionConfigurationError (&pThis->m_USBFunction, FromUSBKbd);
 
 		return FALSE;
 	}
 	
-	if (!USBDeviceConfigure (&pThis->m_USBDevice))
+	if (!USBFunctionConfigure (&pThis->m_USBFunction))
 	{
-		LogWrite (FromUSBKbd, LOG_ERROR, "Cannot set configuration");
+		LogWrite (FromUSBKbd, LOG_ERROR, "Cannot set interface");
 
 		return FALSE;
 	}
 
-	if (pThis->m_ucAlternateSetting != 0)
-	{
-		if (DWHCIDeviceControlMessage (USBDeviceGetHost (&pThis->m_USBDevice),
-					USBDeviceGetEndpoint0 (&pThis->m_USBDevice),
-					REQUEST_OUT | REQUEST_TO_INTERFACE, SET_INTERFACE,
-					pThis->m_ucAlternateSetting,
-					pThis->m_ucInterfaceNumber, 0, 0) < 0)
-		{
-			LogWrite (FromUSBKbd, LOG_ERROR, "Cannot set interface");
-
-			return FALSE;
-		}
-	}
-
-	if (DWHCIDeviceControlMessage (USBDeviceGetHost (&pThis->m_USBDevice),
-				       USBDeviceGetEndpoint0 (&pThis->m_USBDevice),
+	if (DWHCIDeviceControlMessage (USBFunctionGetHost (&pThis->m_USBFunction),
+				       USBFunctionGetEndpoint0 (&pThis->m_USBFunction),
 				       REQUEST_OUT | REQUEST_CLASS | REQUEST_TO_INTERFACE,
 				       SET_PROTOCOL, BOOT_PROTOCOL,
-				       pThis->m_ucInterfaceNumber, 0, 0) < 0)
+				       USBFunctionGetInterfaceNumber (&pThis->m_USBFunction), 0, 0) < 0)
 	{
 		LogWrite (FromUSBKbd, LOG_ERROR, "Cannot set boot protocol");
 
 		return FALSE;
 	}
+
+	// setting the LED status forces some keyboard adapters to work
+	USBKeyboardDeviceSetLEDs (pThis, pThis->m_ucLastLEDStatus);
 
 	TString DeviceName;
 	String (&DeviceName);
@@ -203,6 +178,18 @@ void USBKeyboardDeviceRegisterShutdownHandler (TUSBKeyboardDevice *pThis, TShutd
 	pThis->m_pShutdownHandler = pShutdownHandler;
 }
 
+void USBKeyboardDeviceUpdateLEDs (TUSBKeyboardDevice *pThis)
+{
+	assert (pThis != 0);
+	u8 ucLEDStatus = KeyMapGetLEDStatus (&pThis->m_KeyMap);
+	if (ucLEDStatus != pThis->m_ucLastLEDStatus)
+	{
+		USBKeyboardDeviceSetLEDs (pThis, ucLEDStatus);
+
+		pThis->m_ucLastLEDStatus = ucLEDStatus;
+	}
+}
+
 void USBKeyboardDeviceRegisterKeyStatusHandlerRaw (TUSBKeyboardDevice *pThis, TKeyStatusHandlerRaw *pKeyStatusHandlerRaw)
 {
 	assert (pThis != 0);
@@ -210,18 +197,34 @@ void USBKeyboardDeviceRegisterKeyStatusHandlerRaw (TUSBKeyboardDevice *pThis, TK
 	pThis->m_pKeyStatusHandlerRaw = pKeyStatusHandlerRaw;
 }
 
-char USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode)
+void USBKeyboardDeviceSetLEDs (TUSBKeyboardDevice *pThis, u8 ucLEDMask)
 {
-  char c = 0;
 	assert (pThis != 0);
 
-	const char *pKeyString;
-	char Buffer[2];
+	u8 LEDs[1] ALIGN(4) = {ucLEDMask};	// DMA buffer
+
+	if (DWHCIDeviceControlMessage (USBFunctionGetHost (&pThis->m_USBFunction),
+				       USBFunctionGetEndpoint0 (&pThis->m_USBFunction),
+				       REQUEST_OUT | REQUEST_CLASS | REQUEST_TO_INTERFACE,
+				       SET_REPORT, (REPORT_TYPE_OUTPUT << 8) | 0,
+				       USBFunctionGetInterfaceNumber (&pThis->m_USBFunction),
+				       LEDs, sizeof LEDs) < 0)
+	{
+		LogWrite (FromUSBKbd, LOG_WARNING, "Cannot set LEDs");
+	}
+}
+
+char *USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode)
+{
+	assert (pThis != 0);
+
+	char *pKeyString = 0;
+	static char Buffer[2];
 
 	u8 ucModifiers = USBKeyboardDeviceGetModifiers (pThis);
-	u8 ucLogCode = KeyMapTranslate (&pThis->m_KeyMap, ucPhyCode, ucModifiers);
+	u16 usLogCode = KeyMapTranslate (&pThis->m_KeyMap, ucPhyCode, ucModifiers);
 
-	switch (ucLogCode)
+	switch (usLogCode)
 	{
 	case ActionSwitchCapsLock:
 	case ActionSwitchNumLock:
@@ -242,7 +245,7 @@ char USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode)
 	case ActionSelectConsole12:
 		if (pThis->m_pSelectConsoleHandler != 0)
 		{
-			unsigned nConsole = ucLogCode - ActionSelectConsole1;
+			unsigned nConsole = usLogCode - ActionSelectConsole1;
 			assert (nConsole < 12);
 
 			(*pThis->m_pSelectConsoleHandler) (nConsole);
@@ -257,19 +260,17 @@ char USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode)
 		break;
 
 	default:
-		pKeyString = KeyMapGetString (&pThis->m_KeyMap, ucLogCode, ucModifiers, Buffer);
-		if (pKeyString != 0)
+		pKeyString = (char *)KeyMapGetString (&pThis->m_KeyMap, usLogCode, ucModifiers, Buffer);
+		if (pKeyString)
 		{
-			if (pThis->m_pKeyPressedHandler != 0)
+			if (pThis->m_pKeyPressedHandler)
 			{
-			  c = pKeyString[0];
-			  (*pThis->m_pKeyPressedHandler) (pKeyString);
+				(*pThis->m_pKeyPressedHandler) (pKeyString);
 			}
 		}
 		break;
 	}
-
-	return c;
+  return pKeyString;
 }
 
 boolean USBKeyboardDeviceStartRequest (TUSBKeyboardDevice *pThis)
@@ -279,13 +280,10 @@ boolean USBKeyboardDeviceStartRequest (TUSBKeyboardDevice *pThis)
 	assert (pThis->m_pReportEndpoint != 0);
 	assert (pThis->m_pReportBuffer != 0);
 	
-	assert (pThis->m_pURB == 0);
-	pThis->m_pURB = malloc (sizeof (TUSBRequest));
-	assert (pThis->m_pURB != 0);
-	USBRequest (pThis->m_pURB, pThis->m_pReportEndpoint, pThis->m_pReportBuffer, BOOT_REPORT_SIZE, 0);
-	USBRequestSetCompletionRoutine (pThis->m_pURB, USBKeyboardDeviceCompletionRoutine, 0, pThis);
+	USBRequest (&pThis->m_URB, pThis->m_pReportEndpoint, pThis->m_pReportBuffer, BOOT_REPORT_SIZE, 0);
+	USBRequestSetCompletionRoutine (&pThis->m_URB, USBKeyboardDeviceCompletionRoutine, 0, pThis);
 	
-	return DWHCIDeviceSubmitAsyncRequest (USBDeviceGetHost (&pThis->m_USBDevice), pThis->m_pURB);
+	return DWHCIDeviceSubmitAsyncRequest (USBFunctionGetHost (&pThis->m_USBFunction), &pThis->m_URB);
 }
 
 void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *pContext)
@@ -294,7 +292,7 @@ void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *
 	assert (pThis != 0);
 	
 	assert (pURB != 0);
-	assert (pThis->m_pURB == pURB);
+	assert (&pThis->m_URB == pURB);
 
 	if (   USBRequestGetStatus (pURB) != 0
 	    && USBRequestGetResultLength (pURB) == BOOT_REPORT_SIZE)
@@ -307,6 +305,14 @@ void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *
 		{
 			u8 ucPhyCode = USBKeyboardDeviceGetKeyCode (pThis);
 
+			// if no key is being pressed but a key repeattimer is running
+			// then stop the timer (no more key repeats)
+			if (ucPhyCode == 0 && pThis->m_hTimer != 0)
+			{
+				CancelKernelTimer (pThis->m_hTimer);
+				pThis->m_hTimer = 0;
+			}
+
 			if (ucPhyCode == pThis->m_ucLastPhyCode)
 			{
 				ucPhyCode = 0;
@@ -318,31 +324,26 @@ void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *
 			
 			if (ucPhyCode != 0)
 			{
-				int c = USBKeyboardDeviceGenerateKeyEvent (pThis, ucPhyCode);
+				char *pKeyString = USBKeyboardDeviceGenerateKeyEvent (pThis, ucPhyCode);
 #ifdef REPEAT_ENABLE
-				if (pThis->m_hTimer != 0)
+				if (pThis->m_hTimer)
 				{
 					CancelKernelTimer (pThis->m_hTimer);
+					pThis->m_hTimer = 0;
 				}
 
-				if( c!=0 && pThis->m_pKeyPressedHandler!=0 )
-				  {
-				    pThis->m_hTimer = StartKernelTimer(REPEAT_DELAY, USBKeyboardDeviceTimerHandler, (void *) c, pThis);
-				    assert (pThis->m_hTimer != 0);
-				  }
+				if( pKeyString && pThis->m_pKeyPressedHandler )
+            {
+				   pThis->m_hTimer = StartKernelTimer(REPEAT_DELAY, USBKeyboardDeviceTimerHandler, pKeyString, pThis);
+					assert (pThis->m_hTimer != 0);
+            }
+
 #endif
-			}
-			else if (pThis->m_hTimer != 0)
-			{
-				CancelKernelTimer (pThis->m_hTimer);
-				pThis->m_hTimer = 0;
 			}
 		}
 	}
 
-	_USBRequest (pThis->m_pURB);
-	free (pThis->m_pURB);
-	pThis->m_pURB = 0;
+	_USBRequest (&pThis->m_URB);
 	
 	USBKeyboardDeviceStartRequest (pThis);
 }
@@ -373,21 +374,20 @@ u8 USBKeyboardDeviceGetKeyCode (TUSBKeyboardDevice *pThis)
 
 void USBKeyboardDeviceTimerHandler (unsigned hTimer, void *pParam, void *pContext)
 {
-  int c = (int) pParam;
 	TUSBKeyboardDevice *pThis = (TUSBKeyboardDevice *) pContext;
 	assert (pThis != 0);
 
-	//assert (hTimer == pThis->m_hTimer);
+	CancelKernelTimer (hTimer);
+	pThis->m_hTimer = 0;
 
-	//if (pThis!=0 && hTimer==pThis->m_hTimer && pThis->m_ucLastPhyCode != 0)
-	{
-	char s[2] = {c, 0};
-	(*pThis->m_pKeyPressedHandler) (s);
-	  //USBKeyboardDeviceGenerateKeyEvent (pThis, pThis->m_ucLastPhyCode);
+	(*pThis->m_pKeyPressedHandler) ((char *)pParam);
 
-	pThis->m_hTimer = StartKernelTimer (REPEAT_RATE, USBKeyboardDeviceTimerHandler, (void *) c, pThis);
-		assert (pThis->m_hTimer != 0);
-	}
+	pThis->m_hTimer = StartKernelTimer(
+		REPEAT_RATE, 
+		USBKeyboardDeviceTimerHandler, 
+		pParam, 
+		pContext);
+	assert (pThis->m_hTimer != 0);
 }
 
 #endif

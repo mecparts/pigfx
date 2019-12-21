@@ -2,7 +2,7 @@
 // dwhciregister.c
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2018  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,14 +21,14 @@
 #include <uspios.h>
 #include <uspi/assert.h>
 
-void DWHCIRegister (TDWHCIRegister *pThis, u32 nAddress)
+void DWHCIRegister (TDWHCIRegister *pThis, uintptr nAddress)
 {
 	assert (pThis != 0);
 	pThis->m_bValid = FALSE;
 	pThis->m_nAddress = nAddress;
 }
 
-void DWHCIRegister2 (TDWHCIRegister *pThis, u32 nAddress, u32 nValue)
+void DWHCIRegister2 (TDWHCIRegister *pThis, uintptr nAddress, u32 nValue)
 {
 	assert (pThis != 0);
 	pThis->m_bValid = TRUE;
@@ -45,7 +45,7 @@ void _DWHCIRegister (TDWHCIRegister *pThis)
 u32 DWHCIRegisterRead (TDWHCIRegister *pThis)
 {
 	assert (pThis != 0);
-	pThis->m_nBuffer = *(u32 *) pThis->m_nAddress;
+	pThis->m_nBuffer = *(volatile u32 *) pThis->m_nAddress;
 	pThis->m_bValid = TRUE;
 	
 	return pThis->m_nBuffer;
@@ -55,7 +55,7 @@ void DWHCIRegisterWrite (TDWHCIRegister *pThis)
 {
 	assert (pThis != 0);
 	assert (pThis->m_bValid);
-	*(u32 *) pThis->m_nAddress = pThis->m_nBuffer;
+	*(volatile u32 *) pThis->m_nAddress = pThis->m_nBuffer;
 }
 
 u32 DWHCIRegisterGet (TDWHCIRegister *pThis)

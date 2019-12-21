@@ -2,7 +2,7 @@
 // bcm2835.h
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014-2015  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2017  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,6 +42,10 @@
 #else
 	#define GPU_MEM_BASE	GPU_UNCACHED_BASE
 #endif
+
+// Convert physical ARM address into bus address
+// (does even work, if a bus address is provided already)
+#define BUS_ADDRESS(phys)	(((phys) & ~0xC0000000) | GPU_MEM_BASE)
 
 //
 // General Purpose I/O
@@ -135,11 +139,12 @@
 //
 #define MAILBOX_BASE		(ARM_IO_BASE + 0xB880)
 
-#define MAILBOX_READ  		MAILBOX_BASE
-#define MAILBOX_STATUS 		(MAILBOX_BASE + 0x18)
+#define MAILBOX0_READ  		(MAILBOX_BASE + 0x00)
+#define MAILBOX0_STATUS 	(MAILBOX_BASE + 0x18)
 	#define MAILBOX_STATUS_EMPTY	0x40000000
+#define MAILBOX1_WRITE		(MAILBOX_BASE + 0x20)
+#define MAILBOX1_STATUS 	(MAILBOX_BASE + 0x38)
 	#define MAILBOX_STATUS_FULL	0x80000000
-#define MAILBOX_WRITE		(MAILBOX_BASE + 0x20)
 
 #define MAILBOX_CHANNEL_PM	0			// power management
 #define MAILBOX_CHANNEL_FB 	1			// frame buffer

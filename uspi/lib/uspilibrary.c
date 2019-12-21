@@ -2,7 +2,7 @@
 // uspilibrary.c
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2018  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #include <uspi/uspilibrary.h>
 #include <uspi.h>
 #include <uspios.h>
-#include <uspi/usbdevice.h>
+#include <uspi/usbfunction.h>
 #include <uspi/string.h>
 #include <uspi/util.h>
 #include <uspi/assert.h>
@@ -31,6 +31,8 @@ static TUSPiLibrary *s_pLibrary = 0;
 
 int USPiInitialize (void)
 {
+	LogWrite (FromUSPi, LOG_DEBUG, "Initializing " USPI_NAME " " USPI_VERSION_STRING);
+
 	assert (s_pLibrary == 0);
 	s_pLibrary = (TUSPiLibrary *) malloc (sizeof (TUSPiLibrary));
 	assert (s_pLibrary != 0);
@@ -38,6 +40,7 @@ int USPiInitialize (void)
 	DeviceNameService (&s_pLibrary->NameService);
 	DWHCIDevice (&s_pLibrary->DWHCI);
 	s_pLibrary->pEth0 = 0;
+	s_pLibrary->pEth10 = 0;
 
 	if (!DWHCIDeviceInitialize (&s_pLibrary->DWHCI))
 	{
@@ -55,6 +58,8 @@ int USPiInitialize (void)
 
 	s_pLibrary->pUMouse1 = (TUSBMouseDevice *) DeviceNameServiceGetDevice (DeviceNameServiceGet (), "umouse1", FALSE);
 
+	s_pLibrary->pMIDI1 = (TUSBMIDIDevice *) DeviceNameServiceGetDevice (DeviceNameServiceGet (), "umidi1", FALSE);
+
 	for (unsigned i = 0; i < MAX_DEVICES; i++)
 	{
 		TString DeviceName;
@@ -69,6 +74,8 @@ int USPiInitialize (void)
 
 	s_pLibrary->pEth0 = (TSMSC951xDevice *) DeviceNameServiceGetDevice (DeviceNameServiceGet (), "eth0", FALSE);
 
+	s_pLibrary->pEth10 = (TLAN7800Device *) DeviceNameServiceGetDevice (DeviceNameServiceGet (), "eth10", FALSE);
+
 	for (unsigned i = 0; i < MAX_DEVICES; i++)
 	{
 		TString DeviceName;
@@ -81,7 +88,7 @@ int USPiInitialize (void)
 		_String  (&DeviceName);
 	}
 
-	LogWrite (FromUSPi, LOG_DEBUG, "USPi library successfully initialized");
+	LogWrite (FromUSPi, LOG_DEBUG, USPI_NAME " successfully initialized");
 
 	return 1;
 }
@@ -106,11 +113,25 @@ void USPiKeyboardRegisterShutdownHandler (TUSPiShutdownHandler *pShutdownHandler
 	USBKeyboardDeviceRegisterShutdownHandler (s_pLibrary->pUKBD1, pShutdownHandler);
 }
 
+void USPiKeyboardUpdateLEDs (void)
+{
+	assert (s_pLibrary != 0);
+	assert (s_pLibrary->pUKBD1 != 0);
+	USBKeyboardDeviceUpdateLEDs (s_pLibrary->pUKBD1);
+}
+
 void USPiKeyboardRegisterKeyStatusHandlerRaw (TKeyStatusHandlerRaw *pKeyStatusHandlerRaw)
 {
 	assert (s_pLibrary != 0);
 	assert (s_pLibrary->pUKBD1 != 0);
 	USBKeyboardDeviceRegisterKeyStatusHandlerRaw (s_pLibrary->pUKBD1, pKeyStatusHandlerRaw);
+}
+
+void USPiKeyboardSetLEDs (unsigned char ucLEDMask)
+{
+	assert (s_pLibrary != 0);
+	assert (s_pLibrary->pUKBD1 != 0);
+	USBKeyboardDeviceSetLEDs (s_pLibrary->pUKBD1, ucLEDMask);
 }
 
 int USPiMouseAvailable (void)
@@ -194,22 +215,50 @@ unsigned USPiMassStorageDeviceGetCapacity (unsigned nDeviceIndex)
 int USPiEthernetAvailable (void)
 {
 	assert (s_pLibrary != 0);
-	return s_pLibrary->pEth0 != 0;
+	return s_pLibrary->pEth0 != 0 || s_pLibrary->pEth10 != 0;
 }
 
 void USPiGetMACAddress (unsigned char Buffer[6])
 {
 	assert (s_pLibrary != 0);
-	assert (s_pLibrary->pEth0 != 0);
-	TMACAddress *pMACAddress = SMSC951xDeviceGetMACAddress (s_pLibrary->pEth0);
+
+	TMACAddress *pMACAddress;
+	if (s_pLibrary->pEth10 != 0)
+	{
+		pMACAddress = LAN7800DeviceGetMACAddress (s_pLibrary->pEth10);
+	}
+	else
+	{
+		assert (s_pLibrary->pEth0 != 0);
+		pMACAddress = SMSC951xDeviceGetMACAddress (s_pLibrary->pEth0);
+	}
 
 	assert (Buffer != 0);
 	MACAddressCopyTo (pMACAddress, Buffer);
 }
 
+int USPiEthernetIsLinkUp (void)
+{
+	assert (s_pLibrary != 0);
+
+	if (s_pLibrary->pEth10 != 0)
+	{
+		return LAN7800DeviceIsLinkUp (s_pLibrary->pEth10) ? 1 : 0;
+	}
+
+	assert (s_pLibrary->pEth0 != 0);
+	return SMSC951xDeviceIsLinkUp (s_pLibrary->pEth0) ? 1 : 0;
+}
+
 int USPiSendFrame (const void *pBuffer, unsigned nLength)
 {
 	assert (s_pLibrary != 0);
+
+	if (s_pLibrary->pEth10 != 0)
+	{
+		return LAN7800DeviceSendFrame (s_pLibrary->pEth10, pBuffer, nLength) ? 1 : 0;
+	}
+
 	assert (s_pLibrary->pEth0 != 0);
 	return SMSC951xDeviceSendFrame (s_pLibrary->pEth0, pBuffer, nLength) ? 1 : 0;
 }
@@ -217,6 +266,12 @@ int USPiSendFrame (const void *pBuffer, unsigned nLength)
 int USPiReceiveFrame (void *pBuffer, unsigned *pResultLength)
 {
 	assert (s_pLibrary != 0);
+
+	if (s_pLibrary->pEth10 != 0)
+	{
+		return LAN7800DeviceReceiveFrame (s_pLibrary->pEth10, pBuffer, pResultLength) ? 1 : 0;
+	}
+
 	assert (s_pLibrary->pEth0 != 0);
 	return SMSC951xDeviceReceiveFrame (s_pLibrary->pEth0, pBuffer, pResultLength) ? 1 : 0;
 }
@@ -266,46 +321,73 @@ const USPiGamePadState *USPiGamePadGetStatus (unsigned nDeviceIndex)
 	return &s_pLibrary->pUPAD[nDeviceIndex]->m_State;
 }
 
+int USPiMIDIAvailable (void)
+{
+	assert (s_pLibrary != 0);
+	return s_pLibrary->pMIDI1 != 0;
+}
+
+void USPiMIDIRegisterPacketHandler (TUSPiMIDIPacketHandler *pPacketHandler)
+{
+	assert (s_pLibrary != 0);
+	assert (s_pLibrary->pMIDI1 != 0);
+	USBMIDIDeviceRegisterPacketHandler (s_pLibrary->pMIDI1, pPacketHandler);
+}
+
 int USPiDeviceGetInformation (unsigned nClass, unsigned nDeviceIndex, TUSPiDeviceInformation *pInfo)
 {
 	assert (s_pLibrary != 0);
 
-	TUSBDevice *pUSBDevice = 0;
+	TUSBFunction *pUSBFunction = 0;
 
 	switch (nClass)
 	{
 	case KEYBOARD_CLASS:
 		if (nDeviceIndex == 0)
 		{
-			pUSBDevice = (TUSBDevice *) s_pLibrary->pUKBD1;
+			pUSBFunction = (TUSBFunction *) s_pLibrary->pUKBD1;
 		}
 		break;
 
 	case MOUSE_CLASS:
 		if (nDeviceIndex == 0)
 		{
-			pUSBDevice = (TUSBDevice *) s_pLibrary->pUMouse1;
+			pUSBFunction = (TUSBFunction *) s_pLibrary->pUMouse1;
 		}
 		break;
 
 	case STORAGE_CLASS:
 		if (nDeviceIndex < MAX_DEVICES)
 		{
-			pUSBDevice = (TUSBDevice *) s_pLibrary->pUMSD[nDeviceIndex];
+			pUSBFunction = (TUSBFunction *) s_pLibrary->pUMSD[nDeviceIndex];
 		}
 		break;
 
 	case ETHERNET_CLASS:
 		if (nDeviceIndex == 0)
 		{
-			pUSBDevice = (TUSBDevice *) s_pLibrary->pEth0;
+			if (s_pLibrary->pEth10 != 0)
+			{
+				pUSBFunction = (TUSBFunction *) s_pLibrary->pEth10;
+			}
+			else
+			{
+				pUSBFunction = (TUSBFunction *) s_pLibrary->pEth0;
+			}
 		}
 		break;
 
 	case GAMEPAD_CLASS:
 		if (nDeviceIndex < MAX_DEVICES)
 		{
-			pUSBDevice = (TUSBDevice *) s_pLibrary->pUPAD[nDeviceIndex];
+			pUSBFunction = (TUSBFunction *) s_pLibrary->pUPAD[nDeviceIndex];
+		}
+		break;
+
+	case MIDI_CLASS:
+		if (nDeviceIndex == 0)
+		{
+			pUSBFunction = (TUSBFunction *) s_pLibrary->pMIDI1;
 		}
 		break;
 
@@ -313,10 +395,13 @@ int USPiDeviceGetInformation (unsigned nClass, unsigned nDeviceIndex, TUSPiDevic
 		break;
 	}
 
-	if (pUSBDevice == 0)
+	if (pUSBFunction == 0)
 	{
 		return 0;
 	}
+
+	TUSBDevice *pUSBDevice = USBFunctionGetDevice (pUSBFunction);
+	assert (pUSBDevice != 0);
 
 	const TUSBDeviceDescriptor *pDesc = USBDeviceGetDeviceDescriptor (pUSBDevice);
 	assert (pDesc != 0);

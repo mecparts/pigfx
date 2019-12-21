@@ -7,7 +7,7 @@
 //	no dynamic attachments
 //
 // USPi - An USB driver for Raspberry Pi written in C
-// Copyright (C) 2014-2015  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2018  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include <uspios.h>
 #include <uspi/bcm2835.h>
 #include <uspi/synchronize.h>
+#include <uspi/macros.h>
 #include <uspi/assert.h>
 
 #define ARM_IRQ_USB		9		// for ConnectInterrupt()
@@ -80,7 +81,7 @@ void DWHCIDeviceStartTransaction (TDWHCIDevice *pThis, TDWHCITransferStageData *
 void DWHCIDeviceStartChannel (TDWHCIDevice *pThis, TDWHCITransferStageData *pStageData);
 void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel);
 void DWHCIDeviceInterruptHandler (void *pParam);
-void DWHCIDeviceTimerHandler (unsigned hTimer, void *pParam, void *pContext);
+void DWHCIDeviceTimerHandler (TKernelTimerHandle hTimer, void *pParam, void *pContext);
 unsigned DWHCIDeviceAllocateChannel (TDWHCIDevice *pThis);
 void DWHCIDeviceFreeChannel (TDWHCIDevice *pThis, unsigned nChannel);
 boolean DWHCIDeviceWaitForBit (TDWHCIDevice *pThis, TDWHCIRegister *pRegister, u32 nMask,boolean bWaitUntilSet, unsigned nMsTimeout);
@@ -97,11 +98,6 @@ void DWHCIDevice (TDWHCIDevice *pThis)
 	pThis->m_nChannelAllocated = 0;
 	pThis->m_bWaiting = FALSE;
 	DWHCIRootPort (&pThis->m_RootPort, pThis);
-
-	for (unsigned nChannel = 0; nChannel < DWHCI_MAX_CHANNELS; nChannel++)
-	{
-		pThis->m_pStageData[nChannel] = 0;
-	}
 }
 
 void _DWHCIDevice (TDWHCIDevice *pThis)
@@ -232,17 +228,16 @@ int DWHCIDeviceControlMessage (TDWHCIDevice *pThis, TUSBEndpoint *pEndpoint,
 {
 	assert (pThis != 0);
 
-	TSetupData *pSetup = (TSetupData *) malloc (sizeof (TSetupData));
-	assert (pSetup != 0);
+	TSetupData SetupData ALIGN (4);		// DMA buffer
 
-	pSetup->bmRequestType = ucRequestType;
-	pSetup->bRequest      = ucRequest;
-	pSetup->wValue	      = usValue;
-	pSetup->wIndex	      = usIndex;
-	pSetup->wLength	      = usDataSize;
+	SetupData.bmRequestType = ucRequestType;
+	SetupData.bRequest      = ucRequest;
+	SetupData.wValue	= usValue;
+	SetupData.wIndex	= usIndex;
+	SetupData.wLength	= usDataSize;
 
 	TUSBRequest URB;
-	USBRequest (&URB, pEndpoint, pData, usDataSize, pSetup);
+	USBRequest (&URB, pEndpoint, pData, usDataSize, &SetupData);
 
 	int nResult = -1;
 
@@ -251,8 +246,6 @@ int DWHCIDeviceControlMessage (TDWHCIDevice *pThis, TUSBEndpoint *pEndpoint,
 		nResult = USBRequestGetResultLength (&URB);
 	}
 	
-	free (pSetup);
-
 	_USBRequest (&URB);
 
 	return nResult;
@@ -749,14 +742,9 @@ boolean DWHCIDeviceTransferStageAsync (TDWHCIDevice *pThis, TUSBRequest *pURB, b
 	{
 		return FALSE;
 	}
-	
-	TDWHCITransferStageData *pStageData =
-		(TDWHCITransferStageData *) malloc (sizeof (TDWHCITransferStageData));
-	assert (pStageData != 0);
-	DWHCITransferStageData (pStageData, nChannel, pURB, bIn, bStatusStage);
 
-	assert (pThis->m_pStageData[nChannel] == 0);
-	pThis->m_pStageData[nChannel] = pStageData;
+	TDWHCITransferStageData *pStageData = &pThis->m_StageData[nChannel];
+	DWHCITransferStageData (pStageData, nChannel, pURB, bIn, bStatusStage);
 
 	DWHCIDeviceEnableChannelInterrupt (pThis, nChannel);
 	
@@ -771,10 +759,7 @@ boolean DWHCIDeviceTransferStageAsync (TDWHCIDevice *pThis, TUSBRequest *pURB, b
 			DWHCIDeviceDisableChannelInterrupt (pThis, nChannel);
 
 			_DWHCITransferStageData (pStageData);
-			free (pStageData);
 
-			pThis->m_pStageData[nChannel] = 0;
-			
 			DWHCIDeviceFreeChannel (pThis, nChannel);
 			
 			return FALSE;
@@ -857,7 +842,7 @@ void DWHCIDeviceStartChannel (TDWHCIDevice *pThis, TDWHCITransferStageData *pSta
 	// set DMA address
 	TDWHCIRegister DMAAddress;
 	DWHCIRegister2 (&DMAAddress, DWHCI_HOST_CHAN_DMA_ADDR (nChannel),
-			DWHCITransferStageDataGetDMAAddress (pStageData) + GPU_MEM_BASE);
+			BUS_ADDRESS (DWHCITransferStageDataGetDMAAddress (pStageData)));
 	DWHCIRegisterWrite (&DMAAddress);
 
 	uspi_CleanAndInvalidateDataCacheRange (DWHCITransferStageDataGetDMAAddress (pStageData),
@@ -955,8 +940,7 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 {
 	assert (pThis != 0);
 
-	TDWHCITransferStageData *pStageData = pThis->m_pStageData[nChannel];
-	assert (pStageData != 0);
+	TDWHCITransferStageData *pStageData = &pThis->m_StageData[nChannel];
 	TDWHCIFrameScheduler *pFrameScheduler = DWHCITransferStageDataGetFrameScheduler (pStageData);
 	TUSBRequest *pURB = DWHCITransferStageDataGetURB (pStageData);
 	assert (pURB != 0);
@@ -1039,8 +1023,6 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 		DWHCIDeviceDisableChannelInterrupt (pThis, nChannel);
 	
 		_DWHCITransferStageData (pStageData);
-		free (pStageData);
-		pThis->m_pStageData[nChannel] = 0;
 
 		DWHCIDeviceFreeChannel (pThis, nChannel);
 
@@ -1060,8 +1042,6 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 			DWHCIDeviceDisableChannelInterrupt (pThis, nChannel);
 
 			_DWHCITransferStageData (pStageData);
-			free (pStageData);
-			pThis->m_pStageData[nChannel] = 0;
 
 			DWHCIDeviceFreeChannel (pThis, nChannel);
 
@@ -1093,8 +1073,6 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 			DWHCIDeviceDisableChannelInterrupt (pThis, nChannel);
 
 			_DWHCITransferStageData (pStageData);
-			free (pStageData);
-			pThis->m_pStageData[nChannel] = 0;
 
 			DWHCIDeviceFreeChannel (pThis, nChannel);
 
@@ -1120,8 +1098,6 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 				DWHCIDeviceDisableChannelInterrupt (pThis, nChannel);
 
 				_DWHCITransferStageData (pStageData);
-				free (pStageData);
-				pThis->m_pStageData[nChannel] = 0;
 
 				DWHCIDeviceFreeChannel (pThis, nChannel);
 
@@ -1158,8 +1134,6 @@ void DWHCIDeviceChannelInterruptHandler (TDWHCIDevice *pThis, unsigned nChannel)
 		USBRequestSetStatus (pURB, 1);
 
 		_DWHCITransferStageData (pStageData);
-		free (pStageData);
-		pThis->m_pStageData[nChannel] = 0;
 
 		DWHCIDeviceFreeChannel (pThis, nChannel);
 
@@ -1233,7 +1207,7 @@ void DWHCIDeviceInterruptHandler (void *pParam)
 	_DWHCIRegister (&IntStatus);
 }
 
-void DWHCIDeviceTimerHandler (unsigned hTimer, void *pParam, void *pContext)
+void DWHCIDeviceTimerHandler (TKernelTimerHandle hTimer, void *pParam, void *pContext)
 {
 	TDWHCIDevice *pThis = (TDWHCIDevice *) pContext;
 	assert (pThis != 0);
