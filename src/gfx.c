@@ -198,8 +198,8 @@ void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, 
 
 void gfx_term_reset_attrib()
 {
-  gfx_set_bg(BLACK);
-  gfx_set_fg(DARKGREEN);
+  gfx_set_bg(DEFAULT_BG);
+  gfx_set_fg(DEFAULT_FG);
   ctx.inverse = 0;
 }
 
@@ -595,7 +595,6 @@ void gfx_term_putstring( const char* str )
             case '\n':
                 gfx_restore_cursor_content();
                 ++ctx.term.cursor_row;
-                //ctx.term.cursor_col = 0;
                 gfx_term_render_cursor();
                 break;
 
@@ -613,7 +612,6 @@ void gfx_term_putstring( const char* str )
                 {
                     gfx_restore_cursor_content();
                     --ctx.term.cursor_col;
-                    gfx_clear_rect( ctx.term.cursor_col*FONT_WIDTH, ctx.term.cursor_row*ctx.font_height, FONT_WIDTH, ctx.font_height );
                     gfx_term_render_cursor();
                 }
                 break;
@@ -895,13 +893,13 @@ void state_fun_final_letter( char ch, scn_state *state )
                         } else if( p==27 ) {
                             ctx.inverse = 0;
                         } else if( p>=30 && p<=37 ) {
-                            ctx.fg = (ctx.fg&8) | (p-30);
+                            gfx_set_fg((ctx.fg&8) | (p-30));
                         } else if( p==39 ) {
-                            ctx.fg = 15;
+                            gfx_set_fg(DEFAULT_FG);
                         } else if( p>=40 && p<=47 ) {
                             gfx_set_bg(p-40);
                         } else if( p==49 ) {
-                            gfx_set_bg(7);
+                            gfx_set_bg(DEFAULT_BG);
                         }
                     }
                 }
@@ -914,7 +912,7 @@ void state_fun_final_letter( char ch, scn_state *state )
             {
                 int r = state->cmd_params_size<1 ? 1 : state->cmd_params[0];
                 int c = state->cmd_params_size<2 ? 1 : state->cmd_params[1];
-                gfx_term_move_cursor(r-1, c-1);
+                gfx_term_move_cursor((r-1) % ctx.term.HEIGHT, (c-1) % ctx.term.WIDTH);
                 goto back_to_normal;
                 break;
             }

@@ -40,6 +40,9 @@ typedef enum
 	WHITE			= 0x0F
 } DRAWING_COLOR; // compatible with GFX_COL
 
+#define DEFAULT_FG DARKGREEN
+#define DEFAULT_BG BLACK
+
 // Function type for the functions drawing a character in each mode (normal, xor, transparent)
 typedef void draw_putc_fun( unsigned int row, unsigned int col, unsigned char c );
 

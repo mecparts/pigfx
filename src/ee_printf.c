@@ -56,9 +56,9 @@ This code is based on a file that contains the following:
 
 #define is_digit(c) ((c) >= '0' && (c) <= '9')
 
-//#define DO_LOG_STRING(x)
+#define DO_LOG_STRING(x)
 //#define DO_LOG_STRING(x) uart_write_str(x)
-#define DO_LOG_STRING(x) gfx_term_putstring((const char*)x)
+//#define DO_LOG_STRING(x) gfx_term_putstring((const char*)x)
 
 
 static char *lower_digits = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -601,7 +601,7 @@ void uart_send_char(char c) {
   DO_LOG_STRING(str);
 }
 
-void LogWrite (const char *pSource,		
+void LogWrite (__attribute__((unused))const char *pSource,		
        	       unsigned	   Severity,	
 	       const char *fmt, ...)
 {
