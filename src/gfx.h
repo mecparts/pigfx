@@ -3,8 +3,6 @@
 
 #include "gfx_types.h"
 
-typedef unsigned char GFX_COL;
-
 extern void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, unsigned int pitch, unsigned int size ); 
 extern void gfx_set_bg( GFX_COL col );
 extern void gfx_set_fg( GFX_COL col );
