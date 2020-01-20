@@ -1020,6 +1020,13 @@ void state_fun_selectescape( char ch, scn_state *state )
         state->cmd_params[ 0 ] = ch-'0';
         state->next = state_fun_read_digit;
         return;
+    } else if( ch==';' ) {
+        // assume an initial number of 0
+        state->cmd_params_size = 2;
+        state->cmd_params[0] = 0;
+        state->cmd_params[1] = 0;
+        state->next = state_fun_read_digit;
+        return;
     } else if( ch=='?' || ch=='#' ) {
         state->private_mode_char = ch;
 
