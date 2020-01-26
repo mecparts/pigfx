@@ -907,7 +907,7 @@ void state_fun_final_letter( char ch, scn_state *state )
                         if( p==0 ) {
                             gfx_term_reset_attrib();
                         } else if( p==1 ) {
-                            ctx.fg |= 8;                    // hold
+                            ctx.fg |= 8;                    // bold
                         } else if( p==2 ) {
                             ctx.fg &= 7;                    // normal
                         } else if( p==3 || p==7 ) {

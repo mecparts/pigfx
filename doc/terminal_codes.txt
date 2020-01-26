@@ -1,24 +1,56 @@
-
+<ESC>[#<x1>;<y1>;<x2>;<y2>l   Draw line between [x1,y1] and [x2,y2]
+<ESC>[#<x>;<y>;<w>;<h>r       Draw rectangle <w> width, <h> tall, with
+                              upper left at [x,y]
+<ESC>[#39;<n>m                Set default foreground color to <n> (0-15)
+<ESC>[#49;<n>m                Set default background color to <n> (0-15)
 
 <ESC>[?25l          Cursor invisible
 <ESC>[?25h          Cursor visible
+
 <ESC>[H             Move to 0-0
 <ESC>[s             Save the cursor position 
 <ESC>[u             Move cursor to previously saved position 
 
-<ESC>[<Row>;<Col>H  Move to <Row>,<Col>
 <ESC>[K             Clear from cursor to the end of the line
 <ESC>[0K            Clear from cursor to the end of the line
 <ESC>[1K            Clear from the beginning of the current line to the cursor 
 <ESC>[2K            Clear the whole line 
+
+<ESC>[J             Clear from cursor row to bottom of screen
+<ESC>[0J            Clear from cursor row to bottom of screen
+<ESC>[1J            Clear from top of screen to cursor row
 <ESC>[2J            Clear the screen and move the cursor to 0-0 
+
 <ESC>[<n>A          Move the cursor up <n> lines
 <ESC>[<n>B          Move the cursor down <n> lines
 <ESC>[<n>C          Move the cursor forward <n> characters
 <ESC>[<n>D          Move the cursor backward <n> characters
 
-<ESC>[0m            Reset color attributes (white on black) 
-<ESC>[<n>m          <n>=30...38 to select foreground color from a fixed set
-                    <n>=40...48 to select background color from a fixed set
+<ESC>[M             Delete line at cursor
+<ESC>[L             Insert line at cursor
+
+<ESC>[m             Reset color attributes (default foreground on default background) 
+<ESC>[0m            Reset color attributes (default foreground on default background) 
+<ESC>[1m            Bold foreground color
+<ESC>[2m            Normal foreground color
+<ESC>[3m            Reverse video on
+<ESC>[4m            Underline
+<ESC>[7m            Reverse video on
+<ESC>[27m           Reverse video off
+<ESC>[<n>m          <n>=30...37 to select foreground color from a fixed set
+                    <n>=40...47 to select background color from a fixed set
 <ESC>[38;5;<n>m     Set foreground color to <n> (0-255) 
+<ESC>[39m           Default foreground colour
 <ESC>[48;5;<n>m     Set background color to <n> (0-255) 
+<ESC>[49m           Default background color
+
+<ESC>[<Row>;<Col>f  Move to <Row>,<Col>
+<ESC>[<Row>;<Col>H  Move to <Row>,<Col>
+
+<ESC>[s             Save cursor
+<ESC>[u             Restore cursor
+
+<ESC>[c             Query terminal type (response: <ESC>[?1;0c)
+
+<ESC>[5n            Query terminal status (response: <ESC>[0n)
+<ESC>[6n            Query cursor position (response: <ESC>[<Row>;<Col>R)
