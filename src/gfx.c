@@ -87,6 +87,7 @@ typedef struct {
     GFX_COL bg;
     GFX_COL fg;
     unsigned int inverse;
+    unsigned int underline;
 
     unsigned int   line_limit;
 
@@ -97,6 +98,8 @@ typedef struct {
 
 } FRAMEBUFFER_CTX;
 
+GFX_COL default_bg = DEFAULT_BG;
+GFX_COL default_fg = DEFAULT_FG;
 
 static FRAMEBUFFER_CTX ctx;
 unsigned int __attribute__((aligned(0x100))) mem_buff_dma[16];
@@ -187,9 +190,10 @@ void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, 
     ctx.term.cursor_visible = 1;
     ctx.term.state.next = state_fun_normaltext;
 
-    ctx.bg = 0;
-    ctx.fg = 15;
+    ctx.bg = DEFAULT_BG;
+    ctx.fg = DEFAULT_FG;
     ctx.inverse = 0;
+    ctx.underline = 0;
     ctx.line_limit = SCREEN_LINES;
 
     gfx_set_font_height(FONT_HEIGHT);
@@ -198,9 +202,10 @@ void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, 
 
 void gfx_term_reset_attrib()
 {
-  gfx_set_bg(DEFAULT_BG);
-  gfx_set_fg(DEFAULT_FG);
+  gfx_set_bg(default_bg);
+  gfx_set_fg(default_fg);
   ctx.inverse = 0;
+  ctx.underline = 0;
 }
 
 void gfx_set_bg( GFX_COL col )
@@ -483,8 +488,14 @@ void gfx_putc( unsigned int row, unsigned int col, unsigned char c )
     {
         {
             register unsigned int gv = *p_glyph++;
+            if( ctx.underline && h==2) {
+                gv = FG;
+            }
             *pf++ =  (gv & FG) | ( ~gv & BG );
             gv = *p_glyph++;
+            if( ctx.underline && h==2 ) {
+                gv = FG;
+            } 
             *pf++ =  (gv & FG) | ( ~gv & BG );
         }
         pf += stride;
@@ -758,6 +769,17 @@ void state_fun_final_letter( char ch, scn_state *state )
                 }
                 goto back_to_normal;
                 break;
+            case 'm':
+                // set either the default foreground or background colour
+                if( state->cmd_params_size == 2 && state->cmd_params[1]<=WHITE) {
+                    if( state->cmd_params[0] == 39 ) {
+                        default_fg = state->cmd_params[1];
+                    } else if( state->cmd_params[0] == 49 ) {
+                        default_bg = state->cmd_params[1];
+                    }
+                }
+                goto back_to_normal;
+                break;
         }
     }
 
@@ -885,21 +907,23 @@ void state_fun_final_letter( char ch, scn_state *state )
                         if( p==0 ) {
                             gfx_term_reset_attrib();
                         } else if( p==1 ) {
-                            ctx.fg |= 8;
+                            ctx.fg |= 8;                    // hold
                         } else if( p==2 ) {
-                            ctx.fg &= 7;
+                            ctx.fg &= 7;                    // normal
                         } else if( p==3 || p==7 ) {
-                            ctx.inverse = 1;
+                            ctx.inverse = 1;                // reverse on
+                        } else if( p==4 ) {
+                            ctx.underline = 1;              // underline
                         } else if( p==27 ) {
-                            ctx.inverse = 0;
+                            ctx.inverse = 0;                // reverse off
                         } else if( p>=30 && p<=37 ) {
-                            gfx_set_fg((ctx.fg&8) | (p-30));
+                            gfx_set_fg((ctx.fg&8) | (p-30));// fg colour
                         } else if( p==39 ) {
-                            gfx_set_fg(DEFAULT_FG);
+                            gfx_set_fg(default_fg);         // default fg
                         } else if( p>=40 && p<=47 ) {
-                            gfx_set_bg(p-40);
+                            gfx_set_bg(p-40);               // bg colour
                         } else if( p==49 ) {
-                            gfx_set_bg(DEFAULT_BG);
+                            gfx_set_bg(default_bg);         // default bg
                         }
                     }
                 }

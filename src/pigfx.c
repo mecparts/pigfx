@@ -521,10 +521,10 @@ void entry_point()
     
     initialize_framebuffer();
 
-    gfx_term_putstring( "\x1B[2J" ); // Clear screen
-
     gfx_term_reset_attrib();
     
+    gfx_term_putstring( "\x1B[2J" ); // Clear screen
+
     //gfx_set_bg(BLUE);
     //gfx_term_putstring( "\x1B[2K" ); // Render blue line at top
 		//gfx_set_fg(YELLOW);// bright yellow
