@@ -489,12 +489,12 @@ void gfx_putc( unsigned int row, unsigned int col, unsigned char c )
         {
             register unsigned int gv = *p_glyph++;
             if( ctx.underline && h==2) {
-                gv = FG;
+                gv = ctx.inverse ? BG : FG;
             }
             *pf++ =  (gv & FG) | ( ~gv & BG );
             gv = *p_glyph++;
             if( ctx.underline && h==2 ) {
-                gv = FG;
+                gv = ctx.inverse ? BG : FG;
             } 
             *pf++ =  (gv & FG) | ( ~gv & BG );
         }
@@ -729,12 +729,15 @@ void gfx_term_clear_screen()
 
 void gfx_term_clear_lines(int from, int to)
 {
-  if( from<0 ) from = 0;
-  if( to>(int) ctx.term.HEIGHT-1 ) to = ctx.term.HEIGHT-1;
-  if( from<=to ) 
-    {
-      gfx_clear_rect(0, from*ctx.font_height, ctx.W, (to-from+1)*ctx.font_height);
-      gfx_term_render_cursor();
+    if( from<0 ) {
+        from = 0;
+    }
+    if( to>(int) ctx.term.HEIGHT-1 ) {
+        to = ctx.term.HEIGHT-1;
+    }
+    if( from<=to ) {
+        gfx_clear_rect(0, from*ctx.font_height, ctx.W, (to-from+1)*ctx.font_height);
+        gfx_term_render_cursor();
     }
 }
 
@@ -829,11 +832,17 @@ void state_fun_final_letter( char ch, scn_state *state )
         case 'J':
             switch( state->cmd_params_size>=1 ? state->cmd_params[0] : 0 ) {
                 case 0:
-                    gfx_term_clear_lines(ctx.term.cursor_row, ctx.term.HEIGHT-1);
+                    gfx_term_clear_till_end();
+                    if( ctx.term.cursor_row+1 < ctx.term.HEIGHT ) {
+                        gfx_term_clear_lines(ctx.term.cursor_row+1, ctx.term.HEIGHT-1);
+                    }
                     break;
 
                 case 1:
-                    gfx_term_clear_lines(0, ctx.term.cursor_row);
+                    gfx_term_clear_till_cursor();
+                    if( ctx.term.cursor_row>0 ) {
+                        gfx_term_clear_lines(0, ctx.term.cursor_row-1);
+                    }
                     break;
 
                 case 2:
