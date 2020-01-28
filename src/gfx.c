@@ -701,6 +701,7 @@ void gfx_term_restore_cursor()
 
 void gfx_term_clear_till_end()
 {
+    gfx_restore_cursor_content();
     gfx_clear_rect( ctx.term.cursor_col*FONT_WIDTH, ctx.term.cursor_row*ctx.font_height, ctx.W, ctx.font_height );
     gfx_term_render_cursor();
 }
@@ -708,6 +709,7 @@ void gfx_term_clear_till_end()
 
 void gfx_term_clear_till_cursor()
 {
+    gfx_restore_cursor_content();
     gfx_clear_rect( 0, ctx.term.cursor_row*ctx.font_height, (ctx.term.cursor_col+1)*FONT_WIDTH, ctx.font_height );
     gfx_term_render_cursor();
 }
@@ -729,6 +731,7 @@ void gfx_term_clear_screen()
 
 void gfx_term_clear_lines(int from, int to)
 {
+    gfx_restore_cursor_content();
     if( from<0 ) {
         from = 0;
     }
