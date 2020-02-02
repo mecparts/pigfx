@@ -321,10 +321,10 @@ void gfx_scroll_up( unsigned int npixels )
 }
 
 
-void gfx_delete_line( unsigned int row )
+void gfx_delete_lines( unsigned int row, unsigned int n )
 {
     unsigned int* pf_dst = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*row);
-    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*(row+1));
+    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*(row+n));
     const unsigned int* const pfb_end = (unsigned int*)( ctx.pfb + ctx.size );
 
     while( pf_src < pfb_end )
@@ -337,10 +337,10 @@ void gfx_delete_line( unsigned int row )
 }
 
 
-void gfx_insert_line( unsigned int row )
+void gfx_insert_lines( unsigned int row, unsigned int n )
 {
     unsigned int* pf_dst = (unsigned int*)( ctx.pfb + ctx.size ) -1;
-    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.size - ctx.Pitch*ctx.font_height) -1;
+    unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.size - ctx.Pitch*ctx.font_height*n) -1;
     const unsigned int* const pfb_end = (unsigned int*)( ctx.pfb + ctx.Pitch*ctx.font_height*row);
 
     while( pf_src >= pfb_end )
@@ -890,19 +890,26 @@ void state_fun_final_letter( char ch, scn_state *state )
             }
 
         case 'M':
-            // delete line
-            gfx_delete_line(ctx.term.cursor_row);
-            gfx_term_render_cursor();
-            goto back_to_normal;
-            break;
+            // delete line(s)
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_restore_cursor_content();
+                gfx_delete_lines(ctx.term.cursor_row, n);
+                gfx_term_render_cursor();
+                goto back_to_normal;
+                break;
+            }
 
         case 'L':
-            // insert line
-            gfx_restore_cursor_content();
-            gfx_insert_line(ctx.term.cursor_row);
-            gfx_term_render_cursor();
-            goto back_to_normal;
-            break;
+            // insert line(s)
+            {
+                int n = state->cmd_params_size > 0 ? state->cmd_params[0] : 1;
+                gfx_restore_cursor_content();
+                gfx_insert_lines(ctx.term.cursor_row, n);
+                gfx_term_render_cursor();
+                goto back_to_normal;
+                break;
+            }
 
         case 'm':
             if( state->cmd_params_size==0 ) {
@@ -922,7 +929,7 @@ void state_fun_final_letter( char ch, scn_state *state )
                             ctx.fg |= 8;                    // bold
                         } else if( p==2 ) {
                             ctx.fg &= 7;                    // normal
-                        } else if( p==3 || p==7 ) {
+                        } else if( p==7 ) {
                             ctx.inverse = 1;                // reverse on
                         } else if( p==4 ) {
                             ctx.underline = 1;              // underline
@@ -1032,6 +1039,12 @@ void state_fun_read_digit( char ch, scn_state *state )
     if( ch>='0' && ch <= '9' ) {
         // parse digit
         state->cmd_params[ state->cmd_params_size - 1] = state->cmd_params[ state->cmd_params_size - 1]*10 + (ch-'0');
+        state->next = state_fun_read_digit; // stay on this state
+        return;
+    }
+
+    if( ch == '\x00' ) {
+        state->cmd_params[ state->cmd_params_size - 1] = state->cmd_params[ state->cmd_params_size - 1]*10;
         state->next = state_fun_read_digit; // stay on this state
         return;
     }
