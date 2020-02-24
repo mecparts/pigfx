@@ -58,7 +58,8 @@ void USBKeyboardDevice (TUSBKeyboardDevice *pThis, TUSBFunction *pDevice)
 	pThis->m_pShutdownHandler = 0;
 	pThis->m_pKeyStatusHandlerRaw = 0;
 	pThis->m_pReportBuffer = 0;
-	pThis->m_ucLastPhyCode = 0;
+	pThis->m_pLastPhyCodes = 0;
+	pThis->m_ucRepeatingKey = 0;
 	pThis->m_hTimer = 0;
 	pThis->m_ucLastLEDStatus = 0;
 
@@ -66,6 +67,12 @@ void USBKeyboardDevice (TUSBKeyboardDevice *pThis, TUSBFunction *pDevice)
 
 	pThis->m_pReportBuffer = malloc (BOOT_REPORT_SIZE);
 	assert (pThis->m_pReportBuffer != 0);
+	pThis->m_pLastPhyCodes = malloc (BOOT_REPORT_SIZE);
+	assert (pThis->m_pLastPhyCodes != 0);
+	for( int i=2; i<BOOT_REPORT_SIZE; ++i )
+	{
+		pThis->m_pLastPhyCodes[i] = 0;
+	}
 }
 
 void _CUSBKeyboardDevice (TUSBKeyboardDevice *pThis)
@@ -76,6 +83,11 @@ void _CUSBKeyboardDevice (TUSBKeyboardDevice *pThis)
 	{
 		free (pThis->m_pReportBuffer);
 		pThis->m_pReportBuffer = 0;
+	}
+	if (pThis->m_pLastPhyCodes != 0)
+	{
+		free (pThis->m_pLastPhyCodes);
+		pThis->m_pLastPhyCodes = 0;
 	}
 
 	if (pThis->m_pReportEndpoint != 0)
@@ -270,7 +282,7 @@ char *USBKeyboardDeviceGenerateKeyEvent (TUSBKeyboardDevice *pThis, u8 ucPhyCode
 		}
 		break;
 	}
-  return pKeyString;
+	return pKeyString;
 }
 
 boolean USBKeyboardDeviceStartRequest (TUSBKeyboardDevice *pThis)
@@ -305,23 +317,27 @@ void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *
 		{
 			u8 ucPhyCode = USBKeyboardDeviceGetKeyCode (pThis);
 
-			// if no key is being pressed but a key repeattimer is running
+			// if no key is being pressed but a key repeat timer is running
 			// then stop the timer (no more key repeats)
-			if (ucPhyCode == 0 && pThis->m_hTimer != 0)
+			if ((ucPhyCode == 0 || ucPhyCode != pThis->m_ucRepeatingKey) && pThis->m_hTimer != 0)
 			{
 				CancelKernelTimer (pThis->m_hTimer);
 				pThis->m_hTimer = 0;
+				pThis->m_ucRepeatingKey = 0;
 			}
 
-			if (ucPhyCode == pThis->m_ucLastPhyCode)
-			{
-				ucPhyCode = 0;
+			if (ucPhyCode != 0) {
+				for (int i=2; i<BOOT_REPORT_SIZE; ++i) {
+					if (ucPhyCode == pThis->m_pLastPhyCodes[i]) {
+						ucPhyCode = 0;
+						break;
+					}
+				}
 			}
-			else
-			{
-				pThis->m_ucLastPhyCode = ucPhyCode;
+			for (int i=2; i<BOOT_REPORT_SIZE; ++i) {
+				pThis->m_pLastPhyCodes[i] = pThis->m_pReportBuffer[i];
 			}
-			
+
 			if (ucPhyCode != 0)
 			{
 				char *pKeyString = USBKeyboardDeviceGenerateKeyEvent (pThis, ucPhyCode);
@@ -333,10 +349,11 @@ void USBKeyboardDeviceCompletionRoutine (TUSBRequest *pURB, void *pParam, void *
 				}
 
 				if( pKeyString && pThis->m_pKeyPressedHandler )
-            {
-				   pThis->m_hTimer = StartKernelTimer(REPEAT_DELAY, USBKeyboardDeviceTimerHandler, pKeyString, pThis);
+				{
+					pThis->m_hTimer = StartKernelTimer(REPEAT_DELAY, USBKeyboardDeviceTimerHandler, pKeyString, pThis);
 					assert (pThis->m_hTimer != 0);
-            }
+					pThis->m_ucRepeatingKey = ucPhyCode;
+				}
 
 #endif
 			}

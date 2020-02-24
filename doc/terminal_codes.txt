@@ -3,6 +3,8 @@
                               upper left at [x,y]
 <ESC>[#39;<n>m                Set default foreground color to <n> (0-15)
 <ESC>[#49;<n>m                Set default background color to <n> (0-15)
+<ESC>[#<n>c                   Print ASCII char <n> (useful for printing
+                              control character symbols)
 
 <ESC>[?25l          Cursor invisible
 <ESC>[?25h          Cursor visible

@@ -50,7 +50,8 @@ typedef struct TUSBKeyboardDevice
 	TUSBRequest m_URB;
 	u8 *m_pReportBuffer;
 
-	u8 m_ucLastPhyCode;
+	u8 *m_pLastPhyCodes;
+	u8 m_ucRepeatingKey;
 	unsigned m_hTimer;
 
 	TKeyMap m_KeyMap;

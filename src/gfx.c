@@ -786,6 +786,14 @@ void state_fun_final_letter( char ch, scn_state *state )
                 }
                 goto back_to_normal;
                 break;
+            case 'c':
+                if( state->cmd_params_size == 1 ) {
+                    gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, (char)(state->cmd_params[0]) );
+                    ++ctx.term.cursor_col;
+                    gfx_term_render_cursor();
+                }
+                goto back_to_normal;
+                break;
         }
     }
 
