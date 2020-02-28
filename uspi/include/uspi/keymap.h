@@ -87,6 +87,7 @@ typedef enum
 	KeyCtrlDown,
 	KeyCtrlLeft,
 	KeyCtrlRight,
+	KeyShiftTabulator,
 	KeyMaxCode
 }
 TSpecialKey;

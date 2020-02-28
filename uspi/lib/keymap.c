@@ -83,7 +83,8 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 	"\x1b[1;5A",// KeyCtrlUp
 	"\x1b[1;5B",// KeyCtrlDown
 	"\x1b[1;5D",// KeyCtrlLeft
-	"\x1b[1;5C"	// KeyCtrlRight
+	"\x1b[1;5C",// KeyCtrlRight
+	"\x1b[Z"  // KeyShiftTabulator
 };
 
 #define C(chr)		((u16) (u8) (chr))

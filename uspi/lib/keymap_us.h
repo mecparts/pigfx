@@ -44,7 +44,7 @@
 {KeyReturn,	KeyReturn,	KeyNone,	KeyNone},	// 0x28
 {KeyEscape,	KeyEscape,	KeyNone,	KeyNone},	// 0x29
 {KeyBackspace,	KeyBackspace,	KeyNone,	KeyNone},	// 0x2A
-{KeyTabulator,	KeyTabulator,	KeyNone,	KeyNone},	// 0x2B
+{KeyTabulator,	KeyShiftTabulator,	KeyNone,	KeyNone},	// 0x2B
 {KeySpace,	KeySpace,	KeyNone,	KeyNone},	// 0x2C
 {'-',		'_',		C('¥'),		KeyNone},	// 0x2D
 {'=',		'+',		C('×'),		C('÷')},	// 0x2E
