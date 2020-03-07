@@ -611,8 +611,7 @@ void gfx_term_putstring( const char* str )
 
             case 0x09: /* tab */
                 gfx_restore_cursor_content();
-                ctx.term.cursor_col += 1;
-                ctx.term.cursor_col =  MIN( ctx.term.cursor_col + FONT_WIDTH - ctx.term.cursor_col%FONT_WIDTH, ctx.term.WIDTH-1 );
+                ctx.term.cursor_col =  MIN( (ctx.term.cursor_col & ~7) + 8, ctx.term.WIDTH-1 );
                 gfx_term_render_cursor();
                 break;
 
@@ -918,6 +917,16 @@ void state_fun_final_letter( char ch, scn_state *state )
                 goto back_to_normal;
                 break;
             }
+        case 'Z':
+            // backtab
+            gfx_restore_cursor_content();
+            if( ctx.term.cursor_col & 7 ) {
+                ctx.term.cursor_col &= ~7;
+            } else {
+                ctx.term.cursor_col =  MAX( (int)ctx.term.cursor_col - 8, 0 );
+            }
+            gfx_term_render_cursor();
+            break;
 
         case 'm':
             if( state->cmd_params_size==0 ) {
@@ -961,9 +970,11 @@ void state_fun_final_letter( char ch, scn_state *state )
         case 'f':
         case 'H':
             {
-                int r = state->cmd_params_size<1 ? 1 : state->cmd_params[0];
-                int c = state->cmd_params_size<2 ? 1 : state->cmd_params[1];
-                gfx_term_move_cursor((r-1) % ctx.term.HEIGHT, (c-1) % ctx.term.WIDTH);
+                unsigned int r = state->cmd_params_size<1 ? 1 : state->cmd_params[0];
+                unsigned int c = state->cmd_params_size<2 ? 1 : state->cmd_params[1];
+                // if asked to move past the bottom of the screen, just move to the bottom
+                // do the same sort of thing at the right side too.
+                gfx_term_move_cursor(MIN(r-1, ctx.term.HEIGHT-1), MIN(c-1, ctx.term.WIDTH-1));
                 goto back_to_normal;
                 break;
             }

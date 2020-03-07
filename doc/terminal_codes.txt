@@ -31,6 +31,8 @@
 <ESC>[M             Delete line at cursor
 <ESC>[L             Insert line at cursor
 
+<ESC>[Z             Back tab
+
 <ESC>[m             Reset color attributes (default foreground on default background) 
 <ESC>[0m            Reset color attributes (default foreground on default background) 
 <ESC>[1m            Bold foreground color
