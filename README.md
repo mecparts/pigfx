@@ -7,13 +7,16 @@ terminal for my [RunCPM based ZCPR3.3 system](https://github.com/mecparts/RunCPM
 and in general. The changes are:
 - completely separate carriage return (\r, 0x0d) and line feed (\n,
 0x0a) handling on input and output
-- improved ANSI escape sequence support (insert line, delete line)
+- improved ANSI escape sequence support (insert lines, delete lines,
+  proper erase to end/beginning of screen, underlining, private escape
+  sequences for default colour choices and to print any byte value)
 - moved to most recent USPi library for keyboard LED support
 - properly support keyboard repeat function
+- fixed 2 key rollover
 
-I have tested this on a 512MB Raspberry Pi B because that's what I had
-and used. It was built on a Raspberry Pi 3 B+ and the makefiles have
-been slightly tweaked to account for that.
+I have tested this both on a 512MB Raspberry Pi B and a Pi Zero (the non
+wireless version). It was built on a Raspberry Pi 3 B+ and the makefiles
+have been slightly tweaked to account for that.
 
 To install, simply copy the content of the "bin" directory into the
 root directory of an empty, FAT32 formatted SD card and plug the card
