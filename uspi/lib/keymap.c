@@ -238,68 +238,64 @@ const char *KeyMapGetString (TKeyMap *pThis, u16 nKeyCode, u8 nModifiers, char B
 {
 	assert (pThis != 0);
 
-	if (   nKeyCode <= ' '
-	    || nKeyCode >= KeyMaxCode)
-	{
+	if (nKeyCode <= ' ' || nKeyCode >= KeyMaxCode) {
 		return 0;
 	}
 
-	if (KeySpace <= nKeyCode && nKeyCode < KeyMaxCode)
-	{
-      if (nModifiers & (LCTRL | RCTRL)) {
-          if (KeyUp <= nKeyCode && nKeyCode <= KeyRight) {
-              nKeyCode += KeyCtrlUp-KeyUp;
-          } else if (nKeyCode == KeyReturn || nKeyCode== KeyKP_Enter) {
-             Buffer[0] = 'J' - '@';
-             Buffer[1] = '\0';
-             return Buffer;
-          }
-      }
+	if (KeySpace <= nKeyCode && nKeyCode < KeyMaxCode) {
+		if (nModifiers & (LCTRL | RCTRL)) {
+			if (KeyUp <= nKeyCode && nKeyCode <= KeyRight) {
+				nKeyCode += KeyCtrlUp-KeyUp;
+			} else if (nKeyCode == KeyReturn || nKeyCode== KeyKP_Enter) {
+				Buffer[0] = 'J' - '@';
+				Buffer[1] = '\0';
+				return Buffer;
+			}
+		}
 		return s_KeyStrings[nKeyCode-KeySpace];
 	}
 
 	char chChar = (char) nKeyCode;
 		
-	if (nModifiers & (LCTRL | RCTRL))
-	{
-		if ('a' <= chChar && chChar <= 'z')
-		{
+	if (nModifiers & (LCTRL | RCTRL)) {
+		if ('a' <= chChar && chChar <= 'z') {
 			Buffer[0] = chChar - 'a' + 1;
 			Buffer[1] = '\0';
 
 			return Buffer;
+		} else if (chChar == '[' || chChar == '{') {
+			Buffer[0] = '['-'@';
+			Buffer[1] = '\0';
+         
+			return Buffer;
+		} else if (chChar == '\\' || chChar == '|') {
+			Buffer[0] = '\\'-'@';
+			Buffer[1] = '\0';
+         
+			return Buffer;
+		} else if (chChar == ']' || chChar == '}') {
+			Buffer[0] = ']'-'@';
+			Buffer[1] = '\0';
+         
+			return Buffer;
+		} else if (chChar == '~' || chChar == '^') {
+			Buffer[0] = '^'-'@';
+			Buffer[1] = '\0';
+
+			return Buffer;
 		} else if (chChar == '-' || chChar == '_') {
-         Buffer[0] = '_'-'@';
-         Buffer[1] = '\0';
-         
-         return Buffer;
-      } else if (chChar == '[' || chChar == '{') {
-         Buffer[0] = '['-'@';
-         Buffer[1] = '\0';
-         
-         return Buffer;
-      } else if (chChar == ']' || chChar == '}') {
-         Buffer[0] = ']'-'@';
-         Buffer[1] = '\0';
-         
-         return Buffer;
-      } else if (chChar == '\\' || chChar == '|') {
-         Buffer[0] = '\\'-'@';
-         Buffer[1] = '\0';
-         
-         return Buffer;
+			Buffer[0] = '_'-'@';
+			Buffer[1] = '\0';
+
+			return Buffer;
 		}
 		return 0;
 	}
 
-	if (pThis->m_bCapsLock)
-	{
-		if ('A' <= chChar && chChar <= 'Z')
-		{
+	if (pThis->m_bCapsLock) {
+		if ('A' <= chChar && chChar <= 'Z') {
 			chChar += 'a'-'A';
-		}
-		else if ('a' <= chChar && chChar <= 'z')
-		{
+		} else if ('a' <= chChar && chChar <= 'z') {
 			chChar -= 'a'-'A';
 		}
 	}
