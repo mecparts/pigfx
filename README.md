@@ -38,8 +38,9 @@ https://github.com/fbergama/pigfx
 # References
 
 ## GSX
-[GSX-80 Graphics Extension Programmer's Guide](http://bitsavers.trailing-edge.com/pdf/digitalResearch/gsx/GSX-80_Graphics_Extension_Programmers_Guide_Nov82.pdf)
-[The Graphics System eXtension](http://seasip.info/Cpm/gsx.html)
+
+[GSX-80 Graphics Extension Programmer's Guide](http://bitsavers.trailing-edge.com/pdf/digitalResearch/gsx/GSX-80_Graphics_Extension_Programmers_Guide_Nov82.pdf)<br>
+[The Graphics System eXtension](http://seasip.info/Cpm/gsx.html)<br>
 [Graphics with CP/M](http://www.z80.eu/gsx.html)
 
 
