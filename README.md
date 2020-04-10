@@ -3,13 +3,15 @@
 
 This is a fork of https://github.com/dhansel/pigfx (which is a fork of 
 https://github.com/fbergama/pigfx) with some changes to work better as a
-terminal for my [RunCPM based ZCPR3.3 system](https://github.com/mecparts/RunCPM/tree/zcpr33)
+terminal for my [RunCPM based ZCPR3.3/ZSDOS system](https://github.com/mecparts/RunCPM/tree/zcpr33)
 and in general. The changes are:
 - completely separate carriage return (\r, 0x0d) and line feed (\n,
 0x0a) handling on input and output
 - improved ANSI escape sequence support (insert lines, delete lines,
   proper erase to end/beginning of screen, underlining, private escape
   sequences for default colour choices and to print any byte value)
+- GSX graphics support (a vintage CP/M portable graphics standard,
+  possibly of interest to no one else on the planet!)
 - moved to most recent USPi library for keyboard LED support
 - properly support keyboard repeat function
 - fixed 2 key rollover
@@ -31,6 +33,15 @@ Note that Raspberry Pi pins are 3.3V (not 5V tolerant).
 For more instructions refer to the original projects: 
 https://github.com/dhansel/pigfx
 https://github.com/fbergama/pigfx
+
+
+# References
+
+## GSX
+[GSX-80 Graphics Extension Programmer's Guide](http://bitsavers.trailing-edge.com/pdf/digitalResearch/gsx/GSX-80_Graphics_Extension_Programmers_Guide_Nov82.pdf)
+[The Graphics System eXtension](http://seasip.info/Cpm/gsx.html)
+[Graphics with CP/M](http://www.z80.eu/gsx.html)
+
 
 -----
 

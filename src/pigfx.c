@@ -418,13 +418,13 @@ void video_line_test()
     while(1)
     {
         // Render line
-        gfx_line( 320, 240, x, y );
+        gfx_line( 320, 240, x, y, 15 );
 
         usleep( 1000 );
 
         // Clear line
         gfx_swap_fg_bg();
-        gfx_line( 320, 240, x, y );
+        gfx_line( 320, 240, x, y, 15 );
         gfx_swap_fg_bg();
 
         x = x+vx;

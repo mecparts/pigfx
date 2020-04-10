@@ -1,0 +1,123 @@
+Supported GSX operations
+
+Opcode	Name			Parameters
+ 1	Open Workstation	device #
+				line style
+				line colour
+				marker style
+				marker colour
+				text style
+				text colour
+				fill style
+				fill style index
+				fill colour
+
+ 2	Close Workstation
+ 3	Clear Workstation
+ 4	Update Workstation
+ 5	Escape			operation #
+ 				(see Escape table below)
+ 6	Draw Polyline		# points
+ 				x1
+				y1
+				.
+				.
+				.
+				xn
+				yn
+ 7	Draw Polymarker		# markers
+ 				x1
+				y1
+				.
+				.
+				.
+				xn
+				yn
+ 8	Draw Text		# chars
+				ASCII code of char 1
+				.
+				.
+				.
+				ACII code of char n
+ 9	Draw Filled Polygon	# points
+ 				x1
+				y1
+				.
+				.
+				.
+				xn
+				yn
+10	Draw Bitmap		not implemented yet
+11	Drawing Primitive	primitive type #
+				(see Drawing Primitive table below)
+12	Text Height		text size (1, 2, 3, 4)
+				text height
+				text width
+13	Text Rotation		rotation angle * 10
+14	Set Palette Colour	not implemented yet
+15	Line Type		line type 
+16	Line Width		line width
+17	Line Colour		line colour index
+18	Marker Type		marker number
+19	Marker Height		marker height
+20	Marker Colour		marker colour index
+21	Text Font		not implemented
+22	Text Colour		text colour index
+23	Fill Style		(0-3 = hollow, solid, halftone, hatch)
+24	Fill Style Index	(hatch:1-6 = vert, horiz, +45, -45, cross, x)
+				(halftone:1-6 = black to white in 5 steps)
+25	Fill Colour		fill colour index
+26	Get Palette Colour	not implemented yet
+27	Get Bitmap		not implemented
+28	Input Locator		not implemented
+29	Input Valuator		not implemented
+30	Input Choice		not implemented
+31	Input String		not implemented yet
+32	Writing Mode		not implemented yet
+33	Input Mode		not implemented yet
+
+Escape operations
+Opcode	Name			Parameters
+ 2	Text cursor off
+ 3	Text cursor on
+ 4	Text cursor up
+ 5	Text cursor down
+ 6	Text cursor right
+ 7	Text cursor left
+ 8	Text cursor home
+ 9	Erase to end of screen
+10	Erase to end of line
+11	Move text position	row
+				column
+12	Text output		# chars
+				ASCII code of char 1
+				.
+				.
+				.
+				ACII code of char n
+13	Reverse video on
+14	Reverse video off
+15	Query text cursor addr	not implemented yet
+16	Query tablet status	not implemented
+17	Hardcopy		not implemented
+18	Show graphic cursor	x
+				y
+19	Remove graphic cursor
+
+Drawing Primitive operations
+Opcode	Name			Parameters
+ 1	Bar			x1 lower left
+				y1 lower left
+				x2 upper right
+				y2 upper right
+ 2	Arc			x arc origin
+				y arc originA
+				r arc radius
+				s arc start angle
+				e arc end angle
+ 3	Pie			not implemented yet
+ 4	Circle			x circle origin
+ 				y circle origin
+				r circle radius
+ 5	Line Drawing characters	not implemented yet
+

@@ -26,13 +26,57 @@ extern void gfx_fill_rect( unsigned int x, unsigned int y, unsigned int width, u
 /*! 
  * Renders a line from x0-y0 to x1-y1 
  */
-extern void gfx_line( int x0, int y0, int x1, int y1 );
+extern void gfx_line( int x0, int y0, int x1, int y1, GFX_COL clr );
+
+/*! 
+ * Renders a filled line from x0-y to x1-y 
+ */
+extern void gfx_filled_hline( int x0, int x1, int y, GFX_COL clr);
+
+/*! 
+ * Renders a circle of radius r at x0-y0
+ */
+extern void gfx_circle( int x0, int y0, int r, GFX_COL clr, boolean filled );
+
+/*! 
+ * Renders a pixel atm x-y
+ */
+extern void gfx_pixel( int x, int y, GFX_COL clr );
 
 /*! 
  * Fills a rectangle with the background color 
  */
 extern void gfx_clear_rect( unsigned int x, unsigned int y, unsigned int width, unsigned int height );
 
+extern void gfx_open_workstation(scn_state *state);
+extern void gfx_close_workstation();
+extern void gfx_clear_workstation();
+extern void gfx_update_workstation();
+extern void gfx_escape(scn_state *state);
+extern void gfx_place_graphic_cursor(int x, int y);
+extern void gfx_remove_graphic_cursor(void);
+extern void gfx_read_rect(int ulx, int uly, int w, int h,unsigned char* rect);
+extern void gfx_write_rect(int ulx, int uly, int w, int h,unsigned char* rect);
+extern void gfx_draw_polyline(scn_state *state);
+extern void gfx_draw_polymarkers(scn_state *state);
+extern void gfx_draw_text(scn_state *state);
+extern void gfx_filled_polygon(scn_state *state);
+extern void gfx_circle(int x0, int y0, int r, GFX_COL clr, boolean filled);
+extern float atan(float z);
+extern float atan2(int y, int x);
+extern void gfx_draw_arc_point(int x0, int y0, int x, int y, int a0, int a1, GFX_COL clr);
+extern void gfx_draw_arc(int x0, int y0, int r, int arc_s, int arc_e, GFX_COL clr);
+extern void gfx_draw_bitmap(scn_state *state);
+extern void gfx_drawing_primitive(scn_state *state);
+extern void gfx_set_text_height(scn_state *state);
+extern void gfx_set_text_direction(scn_state *state);
+extern void gfx_set_palette_colour(scn_state *state);
+extern void gfx_get_bitmap(scn_state *state);
+extern void gfx_input_locator(scn_state *state);
+extern void gfx_input_valuator(scn_state *state);
+extern void gfx_input_choice(scn_state *state);
+extern void gfx_input_string(scn_state *state);
+extern void gsx_set_input_mode(scn_state *state);
 /*! 
  * Renders the character "c" at location (x,y)
  */

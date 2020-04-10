@@ -60,7 +60,9 @@ static const unsigned int xterm_colors[256] = {
 0xeeeeee 
 };
 
-
+unsigned int get_rgb(unsigned char i) {
+	return xterm_colors[i];
+}
 
 /*
  * Framebuffer initialization is a modifided version 

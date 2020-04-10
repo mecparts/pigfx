@@ -1,6 +1,6 @@
 
 #ARMGNU ?= arm-none-eabi
-CFLAGS = -Wall -Wextra -O0 -g -nostdlib -nostartfiles -fno-stack-limit -ffreestanding -mfloat-abi=hard -march=armv6j
+CFLAGS = -Wall -Wextra -O0 -g -nostdlib -nostartfiles -fno-stack-limit -ffreestanding -mfloat-abi=hard -march=armv6j -mhard-float -mfpu=vfp
 
 
 ## Important!!! asm.o must be the first object to be linked!
@@ -41,7 +41,7 @@ $(BUILD_DIR)/%.o : $(SRC_DIR)/%.c
 	@echo "CC $<"
 
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.s 
-	@$(ARMGNU)-as $< -o $@
+	@$(ARMGNU)-as -mfloat-abi=hard -mfpu=vfp $< -o $@
 	@echo "AS $<"
 
 %.hex : %.elf 

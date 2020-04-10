@@ -5,7 +5,10 @@
 #include "utils.h"
 #include "uart.h"
 #include "ee_printf.h"
+#include "framebuffer.h"
 #include <stdio.h>
+# define M_PI   3.14159265358979323846  /* pi */
+# define M_PI_2 1.57079632679489661923  /* pi/2 */
 
 extern unsigned char G_FONT_GLYPHS08;
 extern unsigned char G_FONT_GLYPHS14;
@@ -19,7 +22,7 @@ extern unsigned char G_FONT_GLYPHS16;
 
 #define MIN( v1, v2 ) ( ((v1) < (v2)) ? (v1) : (v2))
 #define MAX( v1, v2 ) ( ((v1) > (v2)) ? (v1) : (v2))
-#define PFB( X, Y ) ( ctx.pfb + Y*ctx.Pitch + X )
+#define PFB( X, Y ) ( ctx.pfb + (Y)*ctx.Pitch + (X) )
 
 void __swap__( int* a, int* b )
 {
@@ -43,22 +46,11 @@ void b2s(char *b, unsigned char n)
 }
 
 
-typedef struct SCN_STATE
-{
-    //state_fun* next;
-    void (*next)( char ch, struct SCN_STATE *state );
-    void (*after_read_digit)( char ch, struct SCN_STATE *state );
-
-    unsigned int cmd_params[10];
-    unsigned int cmd_params_size;
-    char private_mode_char;
-} scn_state;
-
 /* state forward declarations */
 typedef void state_fun( char ch, scn_state *state );
 void state_fun_normaltext( char ch, scn_state *state );
 void state_fun_read_digit( char ch, scn_state *state );
-
+void gfx_restore_cursor_content();
 
 
 typedef struct {
@@ -111,6 +103,7 @@ unsigned int __attribute__((aligned(0x100))) mem_buff_dma[16];
 #define GET_BG(ctx)   (ctx.inverse ? ctx.fg : ctx.bg)
 #define GET_FG(ctx)   (ctx.inverse ? ctx.bg : ctx.fg)
 
+static  gsx_state gsx;
 
 extern char *u2s(unsigned int u);
 void gfx_term_render_cursor();
@@ -404,25 +397,25 @@ void gfx_clear_rect( unsigned int x, unsigned int y, unsigned int width, unsigne
 {
     GFX_COL curr_fg = ctx.fg;
     ctx.fg = ctx.bg;
-    gfx_fill_rect(x,y,width,height);
+    gfx_fill_rect(x, y, width, height);
     ctx.fg = curr_fg;
 }
 
 
-void gfx_line( int x0, int y0, int x1, int y1 )
+void gfx_line( int x0, int y0, int x1, int y1, GFX_COL clr )
 {
-    x0 = MAX( MIN(x0, (int)ctx.W), 0 );
-    y0 = MAX( MIN(y0, (int)ctx.H), 0 );
-    x1 = MAX( MIN(x1, (int)ctx.W), 0 );
-    y1 = MAX( MIN(y1, (int)ctx.H), 0 );
+    x0 = MAX( MIN(x0, (int)ctx.W - 1), 0 );
+    y0 = MAX( MIN(y0, (int)ctx.H - 1), 0 );
+    x1 = MAX( MIN(x1, (int)ctx.W - 1), 0 );
+    y1 = MAX( MIN(y1, (int)ctx.H - 1), 0 );
 
     unsigned char qrdt = __abs__(y1 - y0) > __abs__(x1 - x0);
 
-    if( qrdt ) {
+    if (qrdt) {
         __swap__(&x0, &y0);
         __swap__(&x1, &y1);
     }
-    if( x0 > x1 ) {
+    if (x0 > x1) {
         __swap__(&x0, &x1);
         __swap__(&y0, &y1);
     }
@@ -431,34 +424,27 @@ void gfx_line( int x0, int y0, int x1, int y1 )
     const int deltay = __abs__(y1 - y0);
     register int error = deltax >> 1;
     register unsigned char* pfb;
-    unsigned int nr = x1-x0;
+    unsigned int nr = x1 - x0 + 1;
 
-    if( qrdt )
-    {
-        const int ystep = y0<y1 ? 1 : -1;
-        pfb = PFB(y0,x0);
-        while(nr--)
-        {
-              *pfb = GET_FG(ctx);
+    if( qrdt ) {
+        const int ystep = y0 < y1 ? 1 : -1;
+        pfb = PFB(y0, x0);
+        while (nr--) {
+            *pfb = clr;
             error = error - deltay;
-            if( error < 0 )
-            {
+            if (error < 0) {
                 pfb += ystep;
                 error += deltax;
             }
             pfb += ctx.Pitch;
         }
-    }
-    else
-    {
-        const int ystep = y0<y1 ? ctx.Pitch : -ctx.Pitch;
-        pfb = PFB(x0,y0);
-        while(nr--)
-        {
-              *pfb = GET_FG(ctx);
+    } else {
+        const int ystep = y0 < y1 ? ctx.Pitch : -ctx.Pitch;
+        pfb = PFB(x0, y0);
+        while (nr--) {
+            *pfb = clr;
             error = error - deltay;
-            if( error < 0 )
-            {
+            if (error < 0) {
                 pfb += ystep;
                 error += deltax;
             }
@@ -467,6 +453,817 @@ void gfx_line( int x0, int y0, int x1, int y1 )
     }
 }
 
+
+void gfx_pixel( int x, int y, GFX_COL clr ) {
+    if (x >= 0 && x < (int)ctx.W && y >= 0 && y < (int)ctx.H) {
+        register unsigned char* pfb;
+        pfb = PFB(x, y);
+        *pfb = clr;
+    }
+}
+
+//
+// A utility routine used by filled_polygon and 
+// drawing_primitive to draw a horizontal line between
+// (x0,y) and (x1,y) using the current fill parameters
+// (colour, style and style index).
+//
+void gfx_filled_hline(int x0, int x1, int y, GFX_COL clr) {
+
+    switch (gsx.fill_style) {
+        
+        case FS_HOLLOW:
+            break;
+            
+        case FS_SOLID:
+            gfx_line(x0, y, x1, y, clr);
+            break;
+            
+        case FS_HALFTONE:
+            switch (gsx.fill_index) {
+                
+                case 1:    // hollow
+                    break;
+                    
+                case 2:    // very dark
+                    for (int x = x0; x <= x1; ++x) {
+                        if (halftone1[y & 0x1F] & 1 << (x & 0x1F)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case 3:    // dark
+                    for (int x = x0; x <= x1; ++x) {
+                        if (halftone2[y & 0x1F] & 1 << (x & 0x1F)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case 4:    // light
+                    for (int x = x0; x <= x1; ++x) {
+                        if (halftone3[y & 0x1F] & 1 << (x & 0x1F)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case 5:    // very light
+                    for (int x = x0; x <= x1; ++x) {
+                        if (halftone4[y & 0x1F] & 1 << (x & 0x1F)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case 6:    // solid
+                    gfx_line(x0, y, x1, y, clr);
+                    break;
+            }
+            break;
+            
+        case FS_HATCH:
+            switch (gsx.fill_index) {
+                
+                case FSI_VERTICAL:
+                    for (int x = x0; x <= x1; ++x) {
+                        if( !(x & 3) ) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case FSI_HORIZONTAL:
+                    if( !(y & 3) ) {
+                        gfx_line(x0, y, x1, y, clr);
+                    }
+                    break;
+                    
+                case FSI_PLUS45:
+                    for (int x = x0; x <= x1; ++x) {
+                        if (!((x+ y) % 5)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case FSI_MINUS45:
+                    for (int x = x0; x <= x1; ++x) {
+                        if (!((x - y) % 5)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+                    
+                case FSI_CROSS:
+                    if( !(y & 3) ) {
+                        gfx_line(x0, y, x1, y, clr);
+                    } else {
+                        for (int x = x0; x <= x1; ++x) {
+                            if( !(x & 3) ) {
+                                gfx_pixel(x, y, clr);
+                            }
+                        }
+                    }
+                    break;
+                    
+                case FSI_X:
+                    for (int x =x0; x <= x1; ++x) {
+                        if (!((x + y) % 5) || !((x - y) % 5)) {
+                            gfx_pixel(x, y, clr);
+                        }
+                    }
+                    break;
+            }
+            break;
+    }
+}
+
+// GSX 1: open workstation
+void gfx_open_workstation(scn_state *state) {
+    gfx_close_workstation();
+    gsx.device_number     = state->cmd_params[1];
+    gsx.line_style        = state->cmd_params[2];
+    gsx.line_colour       = state->cmd_params[3];
+    gsx.marker_style      = state->cmd_params[4];
+    gsx.marker_colour     = state->cmd_params[5];
+    gsx.text_style        = state->cmd_params[6];
+    gsx.text_colour       = state->cmd_params[7];
+    gsx.fill_style        = state->cmd_params[8]; 
+    gsx.fill_index        = state->cmd_params[9]; 
+    gsx.fill_colour       = state->cmd_params[10]; 
+    gsx.text_height       = TH_MIN;
+    gsx.text_width        = TW_MIN;
+    gsx.text_size         = 1;
+    gsx.text_direction    = 0;
+    gsx.text_font         = 1;
+    gsx.line_width        = 1;
+    gsx.marker_height     = 1;        // minimum marker height
+    gsx.writing_mode      = WM_REPLACE;
+    for (int i = 0; i < LID_MAX; ++i ) {
+        gsx.input_mode[i] = IM_REQUEST;
+    }
+    gsx.reverse_video     = 0;
+    gfx_term_set_cursor_visibility(0);
+    gfx_restore_cursor_content();
+    gfx_clear_workstation();
+}
+
+// GSX 2: close workstation REQ for CRT
+void gfx_close_workstation() {
+    gfx_term_set_cursor_visibility(1);
+    gfx_restore_cursor_content();
+}
+
+// GSX 3: clear workstation REQ for CRT
+void gfx_clear_workstation() {
+    gfx_term_move_cursor(0, 0);
+    gfx_term_clear_screen();
+}
+
+// GSX 4: update workstation REQ for CRT
+void gfx_update_workstation() {
+}
+
+// GSX 5:  escape REQ for CRT
+void gfx_escape(scn_state *state) {
+    switch (state->cmd_params[1]) {
+        
+        case 2:    // enter graphics mode REQ for CRT
+            gfx_term_set_cursor_visibility(0);
+            gfx_term_render_cursor();
+            break;
+            
+        case 3:    // exit graphics mode REQ for CRT
+            gfx_term_set_cursor_visibility(1);
+            gfx_term_render_cursor();
+            break;
+            
+        case 4:    // cursor up REQ for CRT
+            gfx_term_move_cursor(MAX(0,(int) ctx.term.cursor_row-1), ctx.term.cursor_col);
+            break;
+            
+        case 5:    // cursor down REQ for CRT
+            gfx_term_move_cursor(MIN((int) ctx.term.HEIGHT-1, (int) ctx.term.cursor_row+1), ctx.term.cursor_col);
+            break;
+            
+        case 6:    // cursor right REQ for CRT
+            gfx_term_move_cursor(ctx.term.cursor_row, MIN((int) ctx.term.WIDTH-1, (int) ctx.term.cursor_col+1));
+            break;
+            
+        case 7:    // cursor left REQ for CRT
+            gfx_term_move_cursor(ctx.term.cursor_row, MAX(0, (int) ctx.term.cursor_col-1));
+            break;
+            
+        case 8:    // home cursor REQ for CRT
+            gfx_term_move_cursor(0, 0);
+            break;
+            
+        case 9:    // erase to end of screen REQ for CRT
+            gfx_term_clear_till_end();
+            if( ctx.term.cursor_row+1 < ctx.term.HEIGHT ) {
+                gfx_term_clear_lines(ctx.term.cursor_row+1, ctx.term.HEIGHT-1);
+            }
+            break;
+            
+        case 10:    // erase to end of line REQ for CRT
+            gfx_term_clear_till_end();
+            break;
+            
+        case 11: // direct cursor address REQ for CRT
+            {
+                unsigned int r = state->cmd_params[2];
+                unsigned int c = state->cmd_params[3];
+                gfx_term_move_cursor(MIN(r-1, ctx.term.HEIGHT-1), MIN(c-1, ctx.term.WIDTH-1));
+            }
+            break;
+            
+        case 12:    // direct cursor addressable text REQ for CRT
+            for (unsigned int i = 0; i < state->cmd_params[2]; ++i) {
+               gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, state->cmd_params[3 + i] );
+               ++ctx.term.cursor_col;
+               gfx_term_render_cursor();
+            }
+            break;
+            
+        case 13:    // reverse video on
+            ctx.inverse = 1;                // reverse on
+            break;
+            
+        case 14:    // reverse video off
+            ctx.inverse = 0;                // reverse on
+            break;
+            
+        case 15:    // inquire current current cursor address REQ for CRT
+            // TODO
+            break;
+            
+        case 16:    // inquire tablet status
+            // TODO
+            break;
+            
+        case 17:    // hardcopy
+            // TODO
+            break;
+            
+        case 18:    // place graphic cursor at location REQ for CRT
+            gfx_place_graphic_cursor(state->cmd_params[2], state->cmd_params[3]);
+            break;
+            
+        case 19:    // remove last graphic cursor REQ for CRT
+            gfx_remove_graphic_cursor();
+            break;
+    }
+}
+
+void gfx_place_graphic_cursor(int x, int y) {
+   gsx.gc_ulx = x - GSX_GC_ARMLNG;
+   gsx.gc_uly = y - GSX_GC_ARMLNG;
+   gsx.gc_w = GSX_GC_W;
+   gsx.gc_h = GSX_GC_W;
+   if (gsx.gc_ulx < 0) {
+        gsx.gc_w += gsx.gc_ulx;
+    gsx.gc_ulx = 0;
+    }
+    if (gsx.gc_ulx + gsx.gc_w > GSX_MAX_NDC) {
+        gsx.gc_w = GSX_MAX_NDC - gsx.gc_ulx + 1;
+    }
+    if (gsx.gc_uly < 0) {
+        gsx.gc_h += gsx.gc_uly;
+        gsx.gc_uly = 0;
+    }
+    if (gsx.gc_uly + gsx.gc_h > GSX_MAX_NDC) {
+        gsx.gc_h = GSX_MAX_NDC - gsx.gc_uly + 1;
+    }
+    gfx_read_rect(gsx.gc_ulx, gsx.gc_uly, gsx.gc_w, gsx.gc_h, gsx.gc_rect);
+    unsigned char r, g, b;
+    unsigned char clr = WHITE;
+    register unsigned char* pfb;
+	 unsigned int rgb;
+    pfb = PFB(x, y);
+	 rgb = get_rgb(*pfb);
+    r = (rgb >> 16) & 0xFF;
+    g = (rgb >> 8) & 0xFF;
+    b = rgb & 0xFF;
+    if (r > 0x80 && g > 0x80 && b > 0x80) {
+        clr = BLACK;
+    } 
+
+    gfx_line(x - GSX_GC_ARMLNG, y, x + GSX_GC_ARMLNG, y, clr);
+    gfx_line(x, y - GSX_GC_ARMLNG, x, y + GSX_GC_ARMLNG, clr);
+}
+
+void gfx_remove_graphic_cursor(void) {
+    gfx_write_rect(gsx.gc_ulx, gsx.gc_uly, gsx.gc_w, gsx.gc_h, gsx.gc_rect);
+}
+
+void gfx_read_rect(int ulx, int uly, int w, int h,unsigned char* rect) {
+    register unsigned char* pfb;
+    for (int y = 0; y < h; ++y) {
+        pfb = PFB(ulx, (uly + y));
+        for (int x = 0; x < w; ++x) {
+            *rect++ = *pfb++;
+        }
+    }
+}
+
+void gfx_write_rect(int ulx, int uly, int w, int h,unsigned char* rect) {
+    register unsigned char* pfb;
+    for (int y = 0; y < h; ++y) {
+        pfb = PFB(ulx, (uly + y));
+        for (int x = 0; x < w; ++x) {
+            *pfb++ = *rect++;
+        }
+    }
+}
+
+// GSX 6: draw polyline REQ for CRT
+void gfx_draw_polyline(scn_state *state) {
+    int nPoints = state->cmd_params[1] - 1;
+    int x0, y0, x1, y1;
+    
+    for (int i = 0; i < nPoints * 2; i += 2) {
+        x0 = state->cmd_params[i + 2];
+        y0 = state->cmd_params[i + 3];
+        x1 = state->cmd_params[i + 4];
+        y1 = state->cmd_params[i + 5];
+        switch (gsx.line_style) {
+            case LS_DASH:       // 1111111100000000
+            case LS_DOT:        // 1110000011100000
+            case LS_DASH_DOT:   // 1111111000111000
+            case LS_LONG_DASH:  // 1111111111110000
+            case LS_SOLID:
+            default:
+                // TODO: line style
+                gfx_line(x0, y0, x1, y1, gsx.line_colour);
+                break;
+        }
+    }
+}
+
+// GSX 7: plot a group of markers REQ for CRT
+void gfx_draw_polymarkers(scn_state *state) {
+    int nMarkers = state->cmd_params[1];
+    unsigned int armLng = (gsx.marker_height-1)/2;
+    unsigned int shortArmLng = (unsigned int)(armLng * 0.707);
+    
+    for (int i = 0; i < nMarkers; ++i) {
+        int x = state->cmd_params[i + i + 2];
+        int y = state->cmd_params[i + i + 3];
+        
+        switch (gsx.marker_style) {
+            
+            case MS_DOT:
+                gfx_pixel(x, y, gsx.marker_colour);
+                break;
+                
+            case MS_PLUS:
+                gfx_line(x - armLng, y, x + armLng, y, gsx.marker_colour);
+                gfx_line(x, y - armLng, x, y + armLng, gsx.marker_colour);
+                break;
+                
+            case MS_ASTERISK:
+                gfx_line(x - armLng, y, x + armLng, y, gsx.marker_colour);
+                gfx_line(x, y - armLng, x, y + armLng, gsx.marker_colour);
+                gfx_line(x - shortArmLng, y - shortArmLng, x + shortArmLng, y + shortArmLng, gsx.marker_colour);
+                gfx_line(x - shortArmLng, y + shortArmLng, x + shortArmLng, y - shortArmLng, gsx.marker_colour);
+                break;
+                
+            case MS_CIRCLE:
+                gfx_circle(x, y, armLng, gsx.marker_colour, 0);
+                break;
+                
+            case MS_CROSS:
+                gfx_line(x - armLng, y - armLng, x + armLng, y + armLng, gsx.marker_colour);
+                gfx_line(x - armLng, y + armLng, x + armLng, y - armLng, gsx.marker_colour);
+                break;
+        }
+    }
+}
+
+// GSX 8: draw text REQ for CRT
+void gfx_draw_text(scn_state *state) {
+    unsigned int nChars = state->cmd_params[1];
+    int x = state->cmd_params[2];
+    int y = state->cmd_params[3];
+    register unsigned char* p_glyph;
+    char c;
+
+    // Shift character so that x,y is the baseline, not the top
+    switch (gsx.text_direction) {
+        case 900:
+            x -= gsx.text_height - 1;
+            break;
+        case 1800:
+            y += gsx.text_height - 1;
+            break;
+        case 2700:
+            x += gsx.text_height - 1;
+            break;
+        case 0:
+        default:
+            y -= gsx.text_height - 1;
+            break;
+    }
+    for (unsigned int i = 0; i < nChars; ++i ) {
+        c = (char)state->cmd_params[i + 4];
+        p_glyph = (unsigned char*)( ctx.font_data + ((unsigned int)c*FONT_WIDTH*ctx.font_height) );
+        for (int yy = 0; yy < ctx.font_height; ++yy ) {
+            for (int xx = 0; xx < FONT_WIDTH; ++xx ) {
+                if (*p_glyph++) {
+                    switch (gsx.text_direction) {
+                        case 900:
+                            if (gsx.text_size == 1) {
+                                gfx_pixel( x + yy, y - xx, gsx.text_colour );
+                            } else {
+                                for (int i = 0; i < gsx.text_size; ++i ) {
+                                    for (int j = 0; j < gsx.text_size; ++j ) {
+                                        gfx_pixel( x + yy * gsx.text_size + i, y - xx * gsx.text_size - j, gsx.text_colour );
+                                    }
+                                }
+                            }
+                            break;
+                        case 1800:
+                            if (gsx.text_size == 1) {
+                                gfx_pixel( x - xx, y - yy, gsx.text_colour );
+                            } else {
+                                for (int i = 0; i < gsx.text_size; ++i ) {
+                                    for (int j = 0; j < gsx.text_size; ++j ) {
+                                        gfx_pixel( x - xx * gsx.text_size - i, y - yy * gsx.text_size - j, gsx.text_colour );
+                                    }
+                                }
+                            }
+                            break;
+                        case 2700:
+                            if (gsx.text_size == 1) {
+                                gfx_pixel( x - yy, y + xx, gsx.text_colour );
+                            } else {
+                                for (int i = 0; i < gsx.text_size; ++i ) {
+                                    for (int j = 0; j < gsx.text_size; ++j ) {
+                                        gfx_pixel( x - yy * gsx.text_size - i, y + xx * gsx.text_size + j, gsx.text_colour );
+                                    }
+                                }
+                            }
+                            break;
+                        case 0:
+                        default:
+                            if (gsx.text_size == 1) {
+                                gfx_pixel( x + xx, y + yy, gsx.text_colour );
+                            } else {
+                                for (int i = 0; i < gsx.text_size; ++i ) {
+                                    for (int j = 0; j < gsx.text_size; ++j ) {
+                                        gfx_pixel( x + xx * gsx.text_size + i, y + yy * gsx.text_size + j, gsx.text_colour );
+                                    }
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        switch (gsx.text_direction) {
+            case 900:
+                y -= FONT_WIDTH * gsx.text_size;
+                break;
+            case 1800:
+                x -= FONT_WIDTH * gsx.text_size;
+                break;
+            case 2700:
+                y += FONT_WIDTH * gsx.text_size;
+                break;
+            case 0:
+            default:
+                x += FONT_WIDTH * gsx.text_size;
+                break;
+       }
+    }
+}
+
+// GSX 9: draw a filled polygon REQ for CRT
+void gfx_filled_polygon(scn_state *state) {
+
+    int nPoints = state->cmd_params[1];
+    int dy,dx;
+    int temp,k;
+    int xi[1024];
+    float slope[MAX_PTSIN];
+    int ymin=GSX_MAX_NDC,ymax=0;
+    int xin[MAX_PTSIN + 1],yin[MAX_PTSIN +1];
+
+    for (int i = 0; i< nPoints; ++i) {
+        xin[i] = state->cmd_params[2 * i + 2];
+        yin[i] = state->cmd_params[2 * i + 3];
+    }
+    xin[nPoints] = xin[0];
+    yin[nPoints] = yin[0];
+    
+    for (int i = 0; i < nPoints; ++i) {
+        int x0 = xin[i];
+        int y0 = yin[i];
+        int x1 = xin[i + 1];
+        int y1 = yin[i + 1];
+        gfx_line(x0, y0, x1, y1, gsx.fill_colour);
+
+        if( y0 < ymin ) {
+            ymin = y0;
+        }
+        if( y0 > ymax ) {
+            ymax = y0;
+        }
+    }
+    
+    if (gsx.fill_style != FS_HOLLOW) {
+
+        for (int i = 0 ; i < nPoints ; ++i) {
+            dy = yin[i + 1] - yin[i];    // dy=y2-y1
+            dx = xin[i + 1] - xin[i];    // dx=x2-x1
+
+            if (dy == 0) {
+                slope[i] = 1.0;
+            }
+            if (dx == 0) {
+                slope[i] = 0.0;
+            }
+            if (dy != 0 && dx != 0) {            // calculate inverse slope
+                slope[i] = (float)dx / dy;        // typecast to float
+            }
+        }
+
+        for (int y = ymin; y <= ymax; ++y) {        // maximum range of y length resolution is 480 
+            k = 0;
+            for (int i = 0; i < nPoints; ++i) {
+                int x0 = xin[i];
+                int y0 = yin[i];
+                int y1 = yin[i + 1];
+                if ((y0 <= y && y1 > y) || (y0 > y && y1 <= y)) {
+                    xi[k] = (int)(x0 + slope[i] * (y - y0));
+                    ++k;
+                }
+            }
+
+            for (int i = 0; i < k - 1; ++i) {        // Arrange x-intersections in order
+                for (int j = 0; j < k - 1; ++j) {
+                    if (xi[j] > xi[j + 1]) {    // sort x intersection in xi[k] in order using swapping
+                      temp = xi[j];
+                      xi[j] = xi[j + 1];
+                      xi[j + 1] = temp;
+                    }
+                }
+            }
+            for (int i = 0; i < k; i += 2) {        // draw lines to fill polygon
+                gfx_filled_hline(xi[i], xi[i + 1], y, gsx.fill_colour);
+            }
+        }
+    }
+}
+
+// Draw a circle with the current fill characteristic.
+// Basic code pinched from Adafruit GFX library.
+// (Bresenham circle algorithm)
+void gfx_circle(int x0, int y0, int r, GFX_COL clr, boolean filled) {
+    int f = 1 - r;
+    int ddF_x = 1;
+    int ddF_y = -2 * r;
+    int x = 0;
+    int y = r;
+
+    gfx_pixel(x0, y0 + r, clr);
+    gfx_pixel(x0, y0 - r, clr);
+    gfx_pixel(x0 + r, y0, clr);
+    gfx_pixel(x0 - r, y0, clr);
+    if (filled) {
+        gfx_filled_hline(x0 - r, x0 + r, y0, clr);
+    }
+    while (x < y) {
+        if (f >= 0) {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+
+        gfx_pixel(x0 + x, y0 + y, clr);
+        gfx_pixel(x0 - x, y0 + y, clr);
+        gfx_pixel(x0 + x, y0 - y, clr);
+        gfx_pixel(x0 - x, y0 - y, clr);
+        gfx_pixel(x0 + y, y0 + x, clr);
+        gfx_pixel(x0 - y, y0 + x, clr);
+        gfx_pixel(x0 + y, y0 - x, clr);
+        gfx_pixel(x0 - y, y0 - x, clr);
+        if (filled) {
+            gfx_filled_hline(x0 - x, x0 + x, y0 + y, clr);
+            gfx_filled_hline(x0 - x, x0 + x, y0 - y, clr);
+            gfx_filled_hline(x0 - y, x0 + y, y0 + x, clr);
+            gfx_filled_hline(x0 - y, x0 + y, y0 - x, clr);
+        }
+    }
+}
+
+// approximate atan2 function for bare metal w/o math library
+float atan(float z) {
+    const float n1 = 0.97239411f;
+    const float n2 = -0.19194795f;
+    return (n1 + n2 * z * z) * z;
+}
+
+float atan2(int y, int x) {
+    if (x) {
+        int absx = x, absy = y;
+        if (absx < 0) {
+            absx = -absx;
+        }
+        if (absy < 0) {
+            absy = -absy;
+        }
+        if (absx > absy) {
+            const float z = y / (1.0f * x);
+            if (x > 0) {
+                return atan(z);
+            } else if (y >= 0) {
+                return atan(z) + M_PI;
+            } else {
+                return atan(z) - M_PI;
+            }
+        } else {
+            const float z = x / (1.0f * y);
+            if (y > 0) {
+                return -atan(z) + M_PI_2;
+            } else {
+                return -atan(z) - M_PI_2;
+            }
+        }
+    } else {
+        if (y > 0) {
+            return M_PI_2;
+        } else if (y < 0) {
+            return -M_PI_2;
+        }
+    }
+    return 0.0f;
+}
+
+//
+// 0 degrees is defined as 90 degrees clockwise from vertical.
+// degrees increase in the counter clockwise direction.
+//
+void gfx_draw_arc_point(int x0, int y0, int x, int y, int a0, int a1, GFX_COL clr) {
+   if (x <= y) {
+      // if both x and y are >= 0, returned angle will be in [45.. 90] 
+      int angle = 10 * (int)(0.5f + 180 * atan2(y, x) / M_PI);
+      
+      if (900 - angle >= a0 && 900 - angle <= a1) {   //   0 -  45
+         gfx_pixel(x0 + y, y0 - x, clr);
+        }
+      if (angle >= a0 && angle <= a1) {               //  45 -  90
+         gfx_pixel(x0 + x, y0 - y, clr);
+        }
+      if (1800 - angle >= a0 && 1800 - angle <= a1) { //  90 - 135
+         gfx_pixel(x0 - x, y0 - y, clr);
+        }
+      if (angle + 900 >= a0 && angle + 900 <= a1) {   // 135 - 180
+         gfx_pixel(x0 - y, y0 - x, clr);
+        }
+      if (2700 - angle >= a0 && 2700 - angle <= a1) { // 180 - 225
+         gfx_pixel(x0 - y, y0 + x, clr);
+        }
+      if (angle + 1800 >= a0 && angle + 1800 <= a1) { // 225 - 270
+         gfx_pixel(x0 - x, y0 + y, clr);
+        }
+      if (3600 - angle >= a0 && 3600 - angle <= a1) { // 270 - 315
+         gfx_pixel(x0 + x, y0 + y, clr);
+        }
+      if (angle + 2700 >= a0 && angle + 2700 <= a1) { // 315 - 360
+         gfx_pixel(x0 + y, y0 + x, clr);
+        }
+    }
+}
+         
+void gfx_draw_arc(int x0, int y0, int r, int arc_s, int arc_e, GFX_COL clr) {
+    int f = 1 - r;
+    int ddF_x = 1;
+    int ddF_y = -2 * r;
+    int x = 0;
+    int y = r;
+
+    gfx_draw_arc_point(x0, y0, x, y, arc_s, arc_e, clr);
+    while (x < y) {
+        if (f >= 0) {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+        gfx_draw_arc_point(x0, y0, x, y, arc_s, arc_e, clr);
+    }
+}
+
+// GSX 10: draw bitmap REQ for CRT
+void gfx_draw_bitmap(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 11: general drawing primitive REQ for CRT
+void gfx_drawing_primitive(scn_state *state) {
+    switch (state->cmd_params[1]) {
+        case 1:    // bar REQ for CRT
+            {
+                int llx = state->cmd_params[2];
+                int lly = state->cmd_params[3];
+                int urx = state->cmd_params[4];
+                int ury = state->cmd_params[5];
+                gfx_line(llx, lly, llx, ury, gsx.fill_colour);
+                gfx_line(llx, ury, urx, ury, gsx.fill_colour);
+                gfx_line(urx, ury, urx, lly, gsx.fill_colour);
+                gfx_line(urx, lly, llx, lly, gsx.fill_colour);
+                for (int y = ury + 1; y < lly; ++y) {
+                    gfx_filled_hline(llx, urx, y, gsx.fill_colour);
+                }
+            }
+            break;
+        case 2:    // arc: drawn counter clockwise from arc_s to arc_e
+            {
+                int x0 = state->cmd_params[2];
+                int y0 = state->cmd_params[3];
+                int r = state->cmd_params[4];
+                int arc_s = state->cmd_params[5];
+                int arc_e = state->cmd_params[6];
+
+                if (arc_s <= arc_e) {
+                    gfx_draw_arc(x0, y0, r, arc_s, arc_e, gsx.line_colour);
+                } else {
+                    gfx_draw_arc(x0, y0, r, arc_s, 3600, gsx.line_colour);
+                    gfx_draw_arc(x0, y0, r, 0, arc_e, gsx.line_colour);
+                }
+            }
+            break;
+        case 3:    // pie slice
+            // TODO
+            break;
+        case 4:    // circle
+            gfx_circle(
+                state->cmd_params[2],   // x
+                state->cmd_params[3],   // y
+                state->cmd_params[4],   // r
+                gsx.fill_colour,        // clr
+                1);                     // filled
+            break;
+        case 5:    // print graphic characters (ruling characters)
+            // TODO
+            break;
+    }
+}
+
+// GSX 12: set text size REQ for CRT
+void gfx_set_text_height(scn_state *state) {
+    gsx.text_size = state->cmd_params[1];
+    gsx.text_height = state->cmd_params[2];
+    gsx.text_width = state->cmd_params[3];
+}
+
+// GSX 13: set text direction
+void gfx_set_text_direction(scn_state *state) {
+    gsx.text_direction = state->cmd_params[1];
+}
+
+// GSX 14: set colour index (palette registers) REQ for CRT
+void gfx_set_palette_colour(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 27: read bitmap
+void gfx_get_bitmap(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 28: read locator (eg tablet or mouse)
+void gfx_input_locator(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 29: read valuator
+void gfx_input_valuator(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 30: read choice
+void gfx_input_choice(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 31: read string
+void gfx_input_string(scn_state *state) {
+    ++state;	// TODO
+}
+
+// GSX 33: set input mode
+void gsx_set_input_mode(scn_state *state) {
+    ++state;	// TODO
+}
 
 void gfx_putc( unsigned int row, unsigned int col, unsigned char c )
 {
@@ -760,17 +1557,117 @@ void state_fun_final_letter( char ch, scn_state *state )
     if( state->private_mode_char == '#' ) {
         // Non-standard ANSI Codes
         switch( ch ) {
-            case 'l':
-                // render line
-                if( state->cmd_params_size == 4 ) {
-                    gfx_line( state->cmd_params[0], state->cmd_params[1], state->cmd_params[2], state->cmd_params[3] );
-                }
-                goto back_to_normal;
-                break;
-            case 'r':
-                // render a filled rectangle
-                if( state->cmd_params_size == 4 ) {
-                    gfx_fill_rect( state->cmd_params[0], state->cmd_params[1], state->cmd_params[2], state->cmd_params[3] );
+            case 'G':
+                // GSX call
+                if (state->cmd_params_size > 0) {
+                    switch (state->cmd_params[0]) {
+                        case OPC_OPEN_WORKSTATION:
+                            gfx_open_workstation(state);
+                            break;
+                        case OPC_CLOSE_WORKSTATION:
+                            gfx_close_workstation();
+                            break;
+                        case OPC_CLEAR_WORKSTATION:
+                            gfx_clear_workstation();
+                            break;
+                        case OPC_UPDATE_WORKSTATION:
+                            gfx_update_workstation();
+                            break;
+                        case OPC_ESCAPE:
+                            if (state->cmd_params_size > 0) {
+                                gfx_escape(state);
+                            }
+                            break;
+                        case OPC_DRAW_POLYLINE:
+                            if (state->cmd_params_size >= 6) {
+                                gfx_draw_polyline(state);
+                            }
+                            break;
+                        case OPC_DRAW_POLYMARKER:
+                            gfx_draw_polymarkers(state);
+                            break;
+                        case OPC_DRAW_TEXT:
+                            gfx_draw_text(state);
+                            break;
+                        case OPC_DRAW_FILLED_POLYGON:
+                            if (state->cmd_params_size > 2 && state->cmd_params[1] > 2) {
+                                gfx_filled_polygon(state);
+                            }
+                            break;
+                        case OPC_DRAW_BITMAP:
+                            gfx_draw_bitmap(state);
+                            break;
+                        case OPC_DRAWING_PRIMITIVE:
+                            gfx_drawing_primitive(state);
+                            break;
+                        case OPC_TEXT_HEIGHT:
+                            gfx_set_text_height(state);
+                            break;
+                        case OPC_TEXT_ROTATION:
+                            if (state->cmd_params_size == 2) {
+                                gfx_set_text_direction(state);
+                            }
+                            break;
+                        case OPC_SET_PALETTE_COLOUR:
+                            gfx_set_palette_colour(state);
+                            break;
+                        case OPC_POLYLINE_LINETYPE:
+                            gsx.line_style = state->cmd_params[1];
+                            break;
+                        case OPC_POLYLINE_LINEWIDTH:
+                            gsx.line_width = state->cmd_params[1];
+                            break;
+                        case OPC_POLYLINE_COLOUR:
+                            gsx.line_colour = state->cmd_params[1];
+                            break;
+                        case OPC_POLYMARKER_TYPE:
+                            gsx.marker_style = state->cmd_params[1];
+                            break;
+                        case OPC_POLYMARKER_HEIGHT:
+                            gsx.marker_height = state->cmd_params[1];
+                            break;
+                        case OPC_POLYMARKER_COLOUR:
+                            gsx.marker_colour = state->cmd_params[1];
+                            break;
+                        case OPC_TEXT_FONT:
+                            gsx.text_font = state->cmd_params[1];
+                            break;
+                        case OPC_TEXT_COLOUR:
+                            gsx.text_colour = state->cmd_params[1];
+                            break;
+                        case OPC_FILL_STYLE:
+                            gsx.fill_style = state->cmd_params[1];
+                            break;
+                        case OPC_FILL_STYLE_INDEX:
+                            gsx.fill_index = state->cmd_params[1];
+                            break;
+                        case OPC_FILL_COLOUR:
+                            gsx.fill_colour = state->cmd_params[1];
+                            break;
+                        case OPC_GET_PALETTE_COLOUR:
+                            break;
+                        case OPC_GET_BITMAP:
+                            gfx_get_bitmap(state);
+                            break;
+                        case OPC_INPUT_LOCATOR:
+                            gfx_input_locator(state);
+                            break;
+                        case OPC_INPUT_VALUATOR:
+                            gfx_input_valuator(state);
+                            break;
+                        case OPC_INPUT_CHOICE:
+                            gfx_input_choice(state);
+                            break;
+                        case OPC_INPUT_STRING:
+                            gfx_input_string(state);
+                            break;
+                        case OPC_WRITING_MODE:
+                            gsx.writing_mode = state->cmd_params[1];
+                            break;
+                        case OPC_INPUT_MODE:
+                            gsx_set_input_mode(state);
+                            break;
+                    }
                 }
                 goto back_to_normal;
                 break;
@@ -1018,7 +1915,7 @@ void state_fun_final_letter( char ch, scn_state *state )
             if( state->cmd_params_size == 1 ) {
                 char buf[20];
                 if( state->cmd_params[0] == 5 ) {
-                    // query terminal status (always responde OK)
+                    // query terminal status (always respond OK)
                     buf[0] = '\033';
                     buf[1] = '[';
                     buf[2] = '0';

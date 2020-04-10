@@ -56,7 +56,6 @@ This code is based on a file that contains the following:
 
 #define is_digit(c) ((c) >= '0' && (c) <= '9')
 
-#define DO_LOG_STRING(x)
 //#define DO_LOG_STRING(x) uart_write_str(x)
 //#define DO_LOG_STRING(x) gfx_term_putstring((const char*)x)
 
@@ -595,10 +594,14 @@ repeat:
 }
 
 void uart_send_char(char c) {
+#if defined DO_LOG_STRING
   char str[2];
   str[0] = c;
   str[1] = '\0';
   DO_LOG_STRING(str);
+#else
+  ++c;
+#endif
 }
 
 void LogWrite (__attribute__((unused))const char *pSource,		
@@ -612,6 +615,7 @@ void LogWrite (__attribute__((unused))const char *pSource,
   ee_vsprintf(buf, fmt, args);
   va_end(args);
 
+#if defined DO_LOG_STRING
   DO_LOG_STRING( "[" );
   switch( Severity )
   {
@@ -636,6 +640,9 @@ void LogWrite (__attribute__((unused))const char *pSource,
   DO_LOG_STRING( ": " );
   DO_LOG_STRING( buf );
   DO_LOG_STRING( "\r\n" );
+#else
+  ++Severity;
+#endif
 }
 
 void ee_printf(const char *fmt, ...)
@@ -646,7 +653,8 @@ void ee_printf(const char *fmt, ...)
   va_start(args, fmt);
   ee_vsprintf(buf, fmt, args);
   va_end(args);
-
+#if defined DO_LOG_STRING
   DO_LOG_STRING( buf );
+#endif
 }
 

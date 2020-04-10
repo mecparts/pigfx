@@ -14,7 +14,7 @@ FB_INVALID_PITCH          = 0x6
 } FB_RETURN_TYPE;
 
 
-
+extern unsigned int get_rgb(unsigned char i);
 extern FB_RETURN_TYPE fb_init( unsigned int ph_w, unsigned int ph_h, unsigned int vrt_w, unsigned int vrt_h,
                                unsigned int bpp, void** pp_fb, unsigned int* pfbsize, unsigned int* pPitch );
 extern FB_RETURN_TYPE fb_release();
