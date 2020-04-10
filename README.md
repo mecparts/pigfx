@@ -1,6 +1,8 @@
 # PiGFX 
 ## Raspberry Pi graphics card / ANSI terminal emulator
 
+![Penrose triangle](doc/Penrose.jpg)
+
 This is a fork of https://github.com/dhansel/pigfx (which is a fork of 
 https://github.com/fbergama/pigfx) with some changes to work better as a
 terminal for my [RunCPM based ZCPR3.3/ZSDOS system](https://github.com/mecparts/RunCPM/tree/zcpr33)
