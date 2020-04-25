@@ -17,8 +17,9 @@
 #define GPSET0  0x2020001C
 #define GPCLR0  0x20200028
 
-#define UART_BUFFER_SIZE 32768 /* 32k */
-
+#define UART_BUFFER_SIZE 16384u /* 16k */
+#define RTS_OFF_LIMIT (3*UART_BUFFER_SIZE/4)
+#define RTS_ON_LIMIT (UART_BUFFER_SIZE/4)
 
 unsigned int led_status;
 volatile unsigned int* UART0_DR;
@@ -31,6 +32,8 @@ volatile char* uart_buffer;
 volatile char* uart_buffer_start;
 volatile char* uart_buffer_end;
 volatile char* uart_buffer_limit;
+volatile unsigned int uart_buffer_count;
+volatile unsigned int rts_on;
 
 extern unsigned int pheap_space;
 extern unsigned int heap_sz;
@@ -147,15 +150,15 @@ static void _keypress_handler(const char* str )
          char ch = *c;
          //ee_printf("CHAR 0x%x\n",ch );
 
-	 // special casees: print screen clears screen, F12 toggles font
-	 if( ch == 0xFF ) 
-	   { gfx_term_putstring("\x1b[2J\x1b[32m"); ch = 0; }
-	 else if( ch == 0xFE )
-	   { gfx_toggle_font_height(); ch = 0; }
-	 else if( ch == 0xFD )
-	   { rotate_baudrate(); ch = 0; }
-	 else if( ch == 0xFC )
-	   { gfx_toggle_lines(); ch = 0; }
+    // special casees: print screen clears screen, F12 toggles font
+    if( ch == 0xFF ) 
+      { gfx_term_putstring("\x1b[2J\x1b[32m"); ch = 0; }
+    else if( ch == 0xFE )
+      { gfx_toggle_font_height(); ch = 0; }
+    else if( ch == 0xFD )
+      { rotate_baudrate(); ch = 0; }
+    else if( ch == 0xFC )
+      { gfx_toggle_lines(); ch = 0; }
 
 #if ENABLED( SWAP_DEL_WITH_BACKSPACE )
         if( ch == 0x7F ) 
@@ -180,7 +183,7 @@ static void _keypress_handler(const char* str )
         ++c;
 
 #if ENABLED(SEND_CR_LF)
-	if( ch==CR ) uart_write( &LF, 1 );
+   if( ch==CR ) uart_write( &LF, 1 );
 #endif
 
     }
@@ -221,6 +224,14 @@ void uart_fill_queue( __attribute__((unused)) void* data )
             if( uart_buffer_start >= uart_buffer_limit )
                 uart_buffer_start = uart_buffer; 
         }
+        if( uart_buffer_count < UART_BUFFER_SIZE ) {
+            ++uart_buffer_count;
+        }
+        if( rts_on && uart_buffer_count > RTS_OFF_LIMIT ) {
+            rts_on = 0;
+            W32(GPSET0,1<<18);      // tell the computer to stop sending
+        }
+
     }
 
     /* Clear UART0 interrupts */
@@ -232,6 +243,7 @@ void uart_fill_queue( __attribute__((unused)) void* data )
 void initialize_uart_irq()
 {
     uart_buffer_start = uart_buffer_end = uart_buffer;
+    uart_buffer_count = 0;
     uart_buffer_limit = &( uart_buffer[ UART_BUFFER_SIZE ] );
 
     UART0_DR   = (volatile unsigned int*)0x20201000;
@@ -254,7 +266,11 @@ void heartbeat_init()
     ra=R32(GPFSEL1);
     ra&=~(7<<18);
     ra|=1<<18;
+    ra&=~(7<<24);
+    ra|=1<<24;
     W32(GPFSEL1,ra);
+    W32(GPCLR0,1<<18);   // RTS asserted (low)
+    rts_on = 1;
 
     // Enable JTAG pins
     W32( 0x20200000, 0x04a020 );
@@ -477,6 +493,13 @@ void term_main_loop()
         if( !DMA_CHAN0_BUSY && uart_buffer_start != uart_buffer_end )
         {
             strb[0] = *uart_buffer_start++;
+            if( uart_buffer_count > 0 ) {
+                --uart_buffer_count;
+            }
+            if( !rts_on && uart_buffer_count < RTS_ON_LIMIT ) {
+                rts_on = 1;
+                W32(GPCLR0,1<<18);  // tell the computer to resume sending
+            }
             if( uart_buffer_start >= uart_buffer_limit )
                 uart_buffer_start = uart_buffer;
 
@@ -512,6 +535,7 @@ void entry_point()
 
     // UART buffer allocation
     uart_buffer = (volatile char*)nmalloc_malloc( UART_BUFFER_SIZE ); 
+    uart_buffer_count = 0;
     
     uart_init();
     add_initial_baudrate();
@@ -527,7 +551,7 @@ void entry_point()
 
     //gfx_set_bg(BLUE);
     //gfx_term_putstring( "\x1B[2K" ); // Render blue line at top
-		//gfx_set_fg(YELLOW);// bright yellow
+    //gfx_set_fg(YELLOW);// bright yellow
     //ee_printf(" ===  PiGFX ===  v.%d.%d.%d ===  Build %s\r\n", PIGFX_MAJVERSION, PIGFX_MINVERSION, PIGFX_BUILDVERSION, PIGFX_VERSION  );
     //gfx_term_putstring( "\x1B[2K" );
     //ee_printf(" Copyright (c) 2016 Filippo Bergamasco\r\n\r\n");
@@ -570,10 +594,10 @@ void entry_point()
     }
 
     else
-		{
-			gfx_set_fg(RED);
-			ee_printf("USB initialization failed.\r\n");
-		}
+    {
+        gfx_set_fg(RED);
+        ee_printf("USB initialization failed.\r\n");
+    }
 #endif
 
     //ee_printf("---------\r\n");

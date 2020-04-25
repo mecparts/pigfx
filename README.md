@@ -17,6 +17,9 @@ and in general. The changes are:
 - moved to most recent USPi library for keyboard LED support
 - properly support keyboard repeat function
 - fixed 2 key rollover
+- a quasi RTS output to tell the sending computer to hold up (toggled
+  off when the input buffer is 3/4s full and back on when the buffer is
+  down to 1/4 full)
 
 I have tested this both on a 512MB Raspberry Pi B and a Pi Zero (the non
 wireless version). It was built on a Raspberry Pi 3 B+ and the makefiles
@@ -27,8 +30,9 @@ root directory of an empty, FAT32 formatted SD card and plug the card
 into the Raspberry Pi.
 
 The serial port is on the following pins:
-- TX (out) : GPIO14 (pin 8 of the 2-row GPIO connector)
-- RX (in)  : GPIO15 (pin 10 of the 2-row GPIO connector)
+- TX (out)    : GPIO14 (pin 8 of the 2-row GPIO connector)
+- RX (in)     : GPIO15 (pin 10 of the 2-row GPIO connector)
+- "RTS" (out) : GPIO18 (pin12 of of the 2-row GPIO connector)
 
 Note that Raspberry Pi pins are 3.3V (not 5V tolerant).
 

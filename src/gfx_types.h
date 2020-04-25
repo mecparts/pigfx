@@ -18,7 +18,7 @@ typedef struct SCN_STATE
     void (*next)( char ch, struct SCN_STATE *state );
     void (*after_read_digit)( char ch, struct SCN_STATE *state );
 
-    unsigned int cmd_params[150];
+    unsigned int cmd_params[644];
     unsigned int cmd_params_size;
     char private_mode_char;
 } scn_state;

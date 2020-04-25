@@ -740,9 +740,9 @@ void gfx_place_graphic_cursor(int x, int y) {
     unsigned char r, g, b;
     unsigned char clr = WHITE;
     register unsigned char* pfb;
-	 unsigned int rgb;
+     unsigned int rgb;
     pfb = PFB(x, y);
-	 rgb = get_rgb(*pfb);
+     rgb = get_rgb(*pfb);
     r = (rgb >> 16) & 0xFF;
     g = (rgb >> 8) & 0xFF;
     b = rgb & 0xFF;
@@ -1164,7 +1164,12 @@ void gfx_draw_arc(int x0, int y0, int r, int arc_s, int arc_e, GFX_COL clr) {
 
 // GSX 10: draw bitmap REQ for CRT
 void gfx_draw_bitmap(scn_state *state) {
-    ++state;	// TODO
+    int xpos = state->cmd_params[1];
+    int ypos = state->cmd_params[2];
+    int w = state->cmd_params[3];
+    for (int x = 0; x < w; ++x) {
+        gfx_pixel( xpos + x, ypos, state->cmd_params[4 + x]);
+    }
 }
 
 // GSX 11: general drawing primitive REQ for CRT
@@ -1232,37 +1237,37 @@ void gfx_set_text_direction(scn_state *state) {
 
 // GSX 14: set colour index (palette registers) REQ for CRT
 void gfx_set_palette_colour(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 27: read bitmap
 void gfx_get_bitmap(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 28: read locator (eg tablet or mouse)
 void gfx_input_locator(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 29: read valuator
 void gfx_input_valuator(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 30: read choice
 void gfx_input_choice(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 31: read string
 void gfx_input_string(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 // GSX 33: set input mode
 void gsx_set_input_mode(scn_state *state) {
-    ++state;	// TODO
+    ++state;    // TODO
 }
 
 void gfx_putc( unsigned int row, unsigned int col, unsigned char c )

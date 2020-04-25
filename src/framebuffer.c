@@ -326,7 +326,7 @@ FB_RETURN_TYPE fb_set_xterm_palette()
     {
         const unsigned int vc = xterm_colors[pi];
         // RGB -> BGR
-        pBuffData[off++] = (vc<<16 & 0xFF0000) | ( vc & 0x00FF00) | ( vc>>16 & 0x0000FF) | 0xFF000000;         
+        pBuffData[off++] = ((vc & 0xFF)<<16) | (vc & 0x00FF00) | ((vc>>16) & 0xFF) | 0xFF000000;         
     }
     pBuffData[off++] = 0;           // end tag
 
