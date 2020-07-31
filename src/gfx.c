@@ -48,6 +48,7 @@ void b2s(char *b, unsigned char n)
 
 /* state forward declarations */
 typedef void state_fun( char ch, scn_state *state );
+void state_fun_alt_charset( char ch, scn_state *state );
 void state_fun_normaltext( char ch, scn_state *state );
 void state_fun_read_digit( char ch, scn_state *state );
 void gfx_restore_cursor_content();
@@ -80,6 +81,7 @@ typedef struct {
     GFX_COL fg;
     unsigned int inverse;
     unsigned int underline;
+    unsigned int alt_charset;
 
     unsigned int   line_limit;
 
@@ -187,6 +189,7 @@ void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, 
     ctx.fg = DEFAULT_FG;
     ctx.inverse = 0;
     ctx.underline = 0;
+    ctx.alt_charset = 0;
     ctx.line_limit = SCREEN_LINES;
 
     gfx_set_font_height(FONT_HEIGHT);
@@ -2019,6 +2022,9 @@ void state_fun_waitsquarebracket( char ch, scn_state *state )
         state->private_mode_char=0; // reset private mode char
         state->next = state_fun_selectescape;
         return;
+    } else if( ch=='(' ) {
+        state->next = state_fun_alt_charset;
+        return;
     } else if( ch==TERM_ESCAPE_CHAR ) { // Double ESCAPE prints the ESC character
         gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, ch );
         ++ctx.term.cursor_col;
@@ -2033,14 +2039,126 @@ void state_fun_waitsquarebracket( char ch, scn_state *state )
     state->next = state_fun_normaltext;
 }
 
+void state_fun_alt_charset( char ch, scn_state *state )
+{
+   if( ch=='0' ) {
+      ctx.alt_charset = 1;
+   } else if( ch=='B' ) {
+      ctx.alt_charset = 0;
+   }
+   state->next = state_fun_normaltext;
+}
+
 void state_fun_normaltext( char ch, scn_state *state )
 {
-    if( ch==TERM_ESCAPE_CHAR ) {
-        state->next = state_fun_waitsquarebracket;
-        return;
-    }
+   if( ch==TERM_ESCAPE_CHAR ) {
+      state->next = state_fun_waitsquarebracket;
+      return;
+   }
 
-    gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, ch );
-    ++ctx.term.cursor_col;
-    gfx_term_render_cursor();
+   if( ctx.alt_charset ) {
+      switch( ch ) {
+         case '}':
+            ch = '\x9C';  // UK pound sign
+            break;
+         case '.':
+            ch = '\x19';  // arrow pointing down
+            break;
+         case ',':
+            ch = '\x1B';  // arrow pointing left
+            break;
+         case '+':
+            ch = '\x1A';  // arrow pointing right
+            break;
+         case '-':
+            ch = '\x18';  // arrow pointing up
+            break;
+         case 'h':
+            ch = '\xB0';  // board of squares
+            break;
+         case '~':
+            ch = '\x07';  // bullet
+            break;
+         case 'a':
+            ch = '\xB1';  // checkerboard (stipple)
+            break;
+         case 'f':
+            ch = '\xF8';  // degree symbol
+            break;
+         case '`':
+            ch = '\x04';  // diamond
+            break;
+         case 'z':
+            ch = '\xF2';  // greater than or equal to
+            break;
+         case '{':
+            ch = '\xE3';  // greek Pi
+            break;
+         case 'q':
+            ch = '\xC4';  // horizontal line
+            break;
+         case 'i':
+            ch = '\x0F';  // lantern symbol
+            break;
+         case 'n':
+            ch = '\xC5';  // large plus or crossover
+            break;
+         case 'y':
+            ch = '\xF3';  // less than or equal to
+            break;
+         case 'm':
+            ch = '\xC0';  // lower left corner
+            break;
+         case 'j':
+            ch = '\xD9';  // lower right corner
+            break;
+         case '|':
+            ch = '\xF7';  // not equal
+            break;
+         case 'g':
+            ch = '\xF1';  // plus/minus
+            break;
+         case 'o':
+            ch = '\xC4';  // scan line 1
+            break;
+         case 'p':
+            ch = '\xC4';  // scan line 3
+            break;
+         case 'r':
+            ch = '\xC4';  // scan line 7
+            break;
+         case 's':
+            ch = '\xC4';  // scan line 9
+            break;
+         case '0':
+            ch = '\xDB';  // solid square block
+            break;
+         case 'w':
+            ch = '\xC2';  // tee pointing down
+            break;
+         case 'u':
+            ch = '\xB4';  // tee pointing left
+            break;
+         case 't':
+            ch = '\xC3';  // tee pointing right
+            break;
+         case 'v':
+            ch = '\xC1';  // tee pointing up
+            break;
+         case 'l':
+            ch = '\xDA';  // upper left corner
+            break;
+         case 'k':
+            ch = '\xBF';  // upper right corner
+            break;
+         case 'x':
+            ch = '\xB3';  // vertical line
+            break;
+      }
+   }
+   gfx_putc( ctx.term.cursor_row, ctx.term.cursor_col, ch );
+   
+
+   ++ctx.term.cursor_col;
+   gfx_term_render_cursor();
 }

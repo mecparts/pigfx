@@ -75,7 +75,7 @@ char *u2s(unsigned int u)
 
 volatile unsigned int *UART0 = (volatile unsigned int *) 0x20201000;
 
-static int baud[] = {300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, -1, -1};
+static int baud[] = {300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 150000, -1, -1};
 
 
 static void uart0_setbaud(unsigned int baud)
