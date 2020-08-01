@@ -456,7 +456,6 @@ void gfx_line( int x0, int y0, int x1, int y1, GFX_COL clr )
     }
 }
 
-
 void gfx_pixel( int x, int y, GFX_COL clr ) {
     if (x >= 0 && x < (int)ctx.W && y >= 0 && y < (int)ctx.H) {
         register unsigned char* pfb;
@@ -740,21 +739,16 @@ void gfx_place_graphic_cursor(int x, int y) {
         gsx.gc_h = GSX_MAX_NDC - gsx.gc_uly + 1;
     }
     gfx_read_rect(gsx.gc_ulx, gsx.gc_uly, gsx.gc_w, gsx.gc_h, gsx.gc_rect);
-    unsigned char r, g, b;
-    unsigned char clr = WHITE;
+    
     register unsigned char* pfb;
-     unsigned int rgb;
-    pfb = PFB(x, y);
-     rgb = get_rgb(*pfb);
-    r = (rgb >> 16) & 0xFF;
-    g = (rgb >> 8) & 0xFF;
-    b = rgb & 0xFF;
-    if (r > 0x80 && g > 0x80 && b > 0x80) {
-        clr = BLACK;
-    } 
-
-    gfx_line(x - GSX_GC_ARMLNG, y, x + GSX_GC_ARMLNG, y, clr);
-    gfx_line(x, y - GSX_GC_ARMLNG, x, y + GSX_GC_ARMLNG, clr);
+    for (int i = gsx.gc_ulx; i < gsx.gc_ulx + gsx.gc_w; ++i) {
+        pfb = PFB(i, y);
+        *pfb = get_xored_index(*pfb);
+    }
+    for (int i = gsx.gc_uly; i < gsx.gc_uly + gsx.gc_h; ++i) {
+        pfb = PFB(x, i);
+        *pfb = get_xored_index(*pfb);
+    }
 }
 
 void gfx_remove_graphic_cursor(void) {
