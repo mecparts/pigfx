@@ -66,7 +66,7 @@ extern float atan(float z);
 extern float atan2(int y, int x);
 extern void gfx_draw_arc_point(int x0, int y0, int x, int y, int a0, int a1, GFX_COL clr);
 extern void gfx_draw_arc(int x0, int y0, int r, int arc_s, int arc_e, GFX_COL clr);
-extern void gfx_draw_bitmap(scn_state *state);
+extern boolean gfx_draw_bitmap(scn_state *state);
 extern void gfx_drawing_primitive(scn_state *state);
 extern void gfx_set_text_height(scn_state *state);
 extern void gfx_set_text_direction(scn_state *state);

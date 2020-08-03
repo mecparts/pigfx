@@ -1,4 +1,8 @@
 *.swp
 .ctags
 sourceme.bash
-
+*.o
+src/pigfx_config.h
+pigfx.hex
+pigfx.elf
+pigfx.img

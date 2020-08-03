@@ -1160,13 +1160,17 @@ void gfx_draw_arc(int x0, int y0, int r, int arc_s, int arc_e, GFX_COL clr) {
 }
 
 // GSX 10: draw bitmap REQ for CRT
-void gfx_draw_bitmap(scn_state *state) {
+boolean gfx_draw_bitmap(scn_state *state) {
     int xpos = state->cmd_params[1];
     int ypos = state->cmd_params[2];
     int w = state->cmd_params[3];
-    for (int x = 0; x < w; ++x) {
-        gfx_pixel( xpos + x, ypos, state->cmd_params[4 + x]);
+    if( state->cmd_params_size == (unsigned)w + 4 ) {
+       for (int x = 0; x < w; ++x) {
+           gfx_pixel( xpos + x, ypos, state->cmd_params[4 + x]);
+       }
+       return 1;
     }
+    return 0;
 }
 
 // GSX 11: general drawing primitive REQ for CRT
@@ -1556,6 +1560,9 @@ void gfx_term_clear_lines(int from, int to)
 
 void state_fun_final_letter( char ch, scn_state *state )
 {
+    static const char reply[2] = {"G"};
+    boolean ok = 1;
+
     if( state->private_mode_char == '#' ) {
         // Non-standard ANSI Codes
         switch( ch ) {
@@ -1597,7 +1604,7 @@ void state_fun_final_letter( char ch, scn_state *state )
                             }
                             break;
                         case OPC_DRAW_BITMAP:
-                            gfx_draw_bitmap(state);
+                            ok = gfx_draw_bitmap(state);
                             break;
                         case OPC_DRAWING_PRIMITIVE:
                             gfx_drawing_primitive(state);
@@ -1669,8 +1676,17 @@ void state_fun_final_letter( char ch, scn_state *state )
                         case OPC_INPUT_MODE:
                             gsx_set_input_mode(state);
                             break;
+                        default:
+                            ok = 0;
+                            break;
                     }
+                } else {
+                    ok = 0;
                 }
+                if( ok ) {
+                    uart_write(reply, 1);
+                }
+
                 goto back_to_normal;
                 break;
             case 'm':
