@@ -202,6 +202,12 @@ void USBKeyboardDeviceUpdateLEDs (TUSBKeyboardDevice *pThis)
 	}
 }
 
+void USBKeyboardDeviceSetWordstarMode (TUSBKeyboardDevice *pThis, boolean ws)
+{
+	assert (pThis != 0);
+	KeyMapSetWordstarMode (&pThis->m_KeyMap, ws);
+}
+
 void USBKeyboardDeviceRegisterKeyStatusHandlerRaw (TUSBKeyboardDevice *pThis, TKeyStatusHandlerRaw *pKeyStatusHandlerRaw)
 {
 	assert (pThis != 0);

@@ -26,6 +26,8 @@
 #define KEYPAD_FIRST	0x53
 #define KEYPAD_LAST	0x63
 
+static boolean s_wsKeys = FALSE;
+
 // order must match TSpecialKey beginning at KeySpace
 static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 {
@@ -34,24 +36,24 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 	"\b",			// KeyBackspace
 	"\t",			// KeyTabulator
 	"\r",			// KeyReturn
-	"\x1b[2~",		// KeyInsert
-	"\x1b[1~",		// KeyHome
-	"\x1b[5~",		// KeyPageUp
-	"\x1b[3~",		// KeyDelete
-	"\x1b[4~",		// KeyEnd
-	"\x1b[6~",		// KeyPageDown
-	"\x1b[A",		// KeyUp
-	"\x1b[B",		// KeyDown
-	"\x1b[D",		// KeyLeft
-	"\x1b[C",		// KeyRight
-	"\x1b[[A",		// KeyF1
-	"\x1b[[B",		// KeyF2
+	"\x1b[2~",		// KeyInsert    ^V
+	"\x1b[1~",		// KeyHome      ^QS
+	"\x1b[5~",		// KeyPageUp    ^R
+	"\x1b[3~",		// KeyDelete    ^G
+	"\x1b[4~",		// KeyEnd       ^QD
+	"\x1b[6~",		// KeyPageDown  ^C
+	"\x1b[A",		// KeyUp        ^E
+	"\x1b[B",		// KeyDown      ^X
+	"\x1b[D",		// KeyLeft      ^S
+	"\x1b[C",		// KeyRight     ^D
+	"\x1b[[A",		// KeyF1        date
+	"\x1b[[B",		// KeyF2        time
 	"\x1b[[C",		// KeyF3
 	"\x1b[[D",		// KeyF4
 	"\x1b[[E",		// KeyF5
 	"\x1b[17~",		// KeyF6
-	"\x1b[18~",		// KeyF7
-	"\x1b[19~",		// KeyF8
+	"\x1b[18~",		// KeyF7        ^KB
+	"\x1b[19~",		// KeyF8        ^KK
 	"\x1b[20~",		// KeyF9
 	"\xfc",			// KeyF10
 	"\xfd",			// KeyF11
@@ -80,13 +82,73 @@ static const char *s_KeyStrings[KeyMaxCode-KeySpace] =
 	"\x1b[G",		// KeyKP_Center
 	",",			// KeyKP_Comma
 	".",			// KeyKP_Period
-	"\x1b[1;5A",// KeyCtrlUp
-	"\x1b[1;5B",// KeyCtrlDown
-	"\x1b[1;5D",// KeyCtrlLeft
-	"\x1b[1;5C",// KeyCtrlRight
+	"\x1b[1;5A",// KeyCtrlUp          ^W
+	"\x1b[1;5B",// KeyCtrlDown        ^Z
+	"\x1b[1;5D",// KeyCtrlLeft        ^A
+	"\x1b[1;5C",// KeyCtrlRight       ^F
 	"\x1b[Z"  // KeyShiftTabulator
 };
 
+// order must match TSpecialKey beginning at KeySpace
+static const char *s_wsKeyStrings[KeyMaxCode-KeySpace] =
+{
+	" ",			// KeySpace
+	"\x1b",			// KeyEscape
+	"\b",			// KeyBackspace
+	"\t",			// KeyTabulator
+	"\r",			// KeyReturn
+	"\x16",			// KeyInsert    ^V
+	"\x11" "S",		// KeyHome      ^QS
+	"\x12",			// KeyPageUp    ^R
+	"\x07",			// KeyDelete    ^G
+	"\x11" "D",		// KeyEnd       ^QD
+	"\x03",			// KeyPageDown  ^C
+	"\x05",			// KeyUp        ^E
+	"\x18",			// KeyDown      ^X
+	"\x13",			// KeyLeft      ^S
+	"\x04",			// KeyRight     ^D
+	"\x1b[[A",		// KeyF1
+	"\x1b[[B",		// KeyF2
+	"\x1b[[C",		// KeyF3
+	"\x1b[[D",		// KeyF4
+	"\x1b[[E",		// KeyF5
+	"\x1b[17~",		// KeyF6
+	"\x0b" "B",		// KeyF7        ^KB
+	"\x0b" "K",		// KeyF8        ^KK
+	"\x1b[20~",		// KeyF9
+	"\xfc",			// KeyF10
+	"\xfd",			// KeyF11
+	"\xfe",			// KeyF12
+	0,			// KeyApplication
+	0,			// KeyCapsLock
+	"\xff",	// KeyPrintScreen
+	0,			// KeyScrollLock
+	0,			// KeyPause
+	0,			// KeyNumLock
+	"/",			// KeyKP_Divide
+	"*",			// KeyKP_Multiply
+	"-",			// KeyKP_Subtract
+	"+",			// KeyKP_Add
+	"\r",			// KeyKP_Enter
+	"1",			// KeyKP_1
+	"2",			// KeyKP_2
+	"3",			// KeyKP_3
+	"4",			// KeyKP_4
+	"5",			// KeyKP_5
+	"6",			// KeyKP_6
+	"7",			// KeyKP_7
+	"8",			// KeyKP_8
+	"9",			// KeyKP_9
+	"0",			// KeyKP_0
+	"\x1b[G",		// KeyKP_Center
+	",",			// KeyKP_Comma
+	".",			// KeyKP_Period
+	"\x17",		// KeyCtrlUp          ^W
+	"\x1a",		// KeyCtrlDown        ^Z
+	"\x01",		// KeyCtrlLeft        ^A
+	"\x06",		// KeyCtrlRight       ^F
+	"\x1b[Z"  // KeyShiftTabulator
+};
 #define C(chr)		((u16) (u8) (chr))
 
 static const u16 s_DefaultMap[PHY_MAX_CODE+1][K_ALTSHIFTTAB+1] =
@@ -252,7 +314,7 @@ const char *KeyMapGetString (TKeyMap *pThis, u16 nKeyCode, u8 nModifiers, char B
 				return Buffer;
 			}
 		}
-		return s_KeyStrings[nKeyCode-KeySpace];
+		return s_wsKeys ? s_wsKeyStrings[nKeyCode-KeySpace] : s_KeyStrings[nKeyCode-KeySpace];
 	}
 
 	char chChar = (char) nKeyCode;
@@ -328,4 +390,11 @@ u8 KeyMapGetLEDStatus (TKeyMap *pThis)
 	}
 
 	return nResult;
+}
+
+void KeyMapSetWordstarMode (TKeyMap *pThis, boolean ws)
+{
+	assert (pThis != 0);
+
+	s_wsKeys = ws;
 }

@@ -61,6 +61,9 @@ void USPiKeyboardRegisterShutdownHandler (TUSPiShutdownHandler *pShutdownHandler
 // Call this frequently from your application main loop to allow updating the keyboard LEDs.
 void USPiKeyboardUpdateLEDs (void);
 
+// Call this with true to set "Wordstar" cursor key mode, false for normal ANSI
+void USPiKeyboardSetWordstarMode (boolean ws);
+
 // "raw mode" (if this handler is registered the others are ignored)
 // The raw handler is called when the keyboard sends a status report (on status change and/or continously).
 typedef void TUSPiKeyStatusHandlerRaw (unsigned char	     ucModifiers,

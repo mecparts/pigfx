@@ -135,4 +135,5 @@ const char *KeyMapGetString (TKeyMap *pThis, u16 nKeyCode, u8 nModifiers, char B
 
 u8 KeyMapGetLEDStatus (TKeyMap *pThis);
 
+void KeyMapSetWordstarMode (TKeyMap *pThis, boolean ws);
 #endif

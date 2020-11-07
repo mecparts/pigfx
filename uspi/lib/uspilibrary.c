@@ -134,6 +134,13 @@ void USPiKeyboardSetLEDs (unsigned char ucLEDMask)
 	USBKeyboardDeviceSetLEDs (s_pLibrary->pUKBD1, ucLEDMask);
 }
 
+void USPiKeyboardSetWordstarMode(boolean ws)
+{
+	assert (s_pLibrary != 0);
+	assert (s_pLibrary->pUKBD1 != 0);
+	USBKeyboardDeviceSetWordstarMode (s_pLibrary->pUKBD1, ws);
+}
+
 int USPiMouseAvailable (void)
 {
 	assert (s_pLibrary != 0);

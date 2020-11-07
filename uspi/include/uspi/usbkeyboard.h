@@ -76,5 +76,6 @@ void USBKeyboardDeviceUpdateLEDs (TUSBKeyboardDevice *pThis);
 void USBKeyboardDeviceRegisterKeyStatusHandlerRaw (TUSBKeyboardDevice *pThis, TKeyStatusHandlerRaw *pKeyStatusHandlerRaw);
 
 void USBKeyboardDeviceSetLEDs (TUSBKeyboardDevice *pThis, u8 ucLEDMask);
+void USBKeyboardDeviceSetWordstarMode (TUSBKeyboardDevice *pThis, boolean ws);
 
 #endif

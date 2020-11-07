@@ -4,6 +4,7 @@
                               control character symbols)
 <ESC>[#<opcode>;...G          GSX graphics operation (see gsx_codes.txt
                               for details)
+<ESC>[#<n>w                   Turn WordStar cursor key mode on/off
 
 <ESC>[?25l          Hide cursor
 <ESC>[?25h          Show cursor

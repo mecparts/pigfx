@@ -6,7 +6,10 @@
 #include "uart.h"
 #include "ee_printf.h"
 #include "framebuffer.h"
-#include <stdio.h>
+//#include <stdio.h>
+#include "../uspi/env/include/uspienv/types.h"
+#include "../uspi/include/uspi.h"
+
 # define M_PI   3.14159265358979323846  /* pi */
 # define M_PI_2 1.57079632679489661923  /* pi/2 */
 
@@ -1708,6 +1711,14 @@ void state_fun_final_letter( char ch, scn_state *state )
                 }
                 goto back_to_normal;
                 break;
+            case 'w':   // Set/reset Wordstar keymode
+               if( state->cmd_params_size == 0 ) {
+                  USPiKeyboardSetWordstarMode( 0 );
+               } else if( state->cmd_params_size == 1 ) {
+                  USPiKeyboardSetWordstarMode( state->cmd_params[0] != 0 );
+               }
+               goto back_to_normal;
+               break;
         }
     }
 
