@@ -17,9 +17,13 @@
 #define GPSET0  0x2020001C
 #define GPCLR0  0x20200028
 
+#define UART_RXFE 0x10
+
+#ifndef STANDALONE_TERMINAL
 #define UART_BUFFER_SIZE 16384u /* 16k */
 #define RTS_OFF_LIMIT (3*UART_BUFFER_SIZE/4)
 #define RTS_ON_LIMIT (UART_BUFFER_SIZE/4)
+#endif
 
 unsigned int led_status;
 volatile unsigned int* UART0_DR;
@@ -27,13 +31,14 @@ volatile unsigned int* UART0_ITCR;
 volatile unsigned int* UART0_IMSC;
 volatile unsigned int* UART0_FR;
 
-
+#ifndef STANDALONE_TERMINAL
 volatile char* uart_buffer;
 volatile char* uart_buffer_start;
 volatile char* uart_buffer_end;
 volatile char* uart_buffer_limit;
 volatile unsigned int uart_buffer_count;
 volatile unsigned int rts_on;
+#endif
 
 extern unsigned int pheap_space;
 extern unsigned int heap_sz;
@@ -208,7 +213,7 @@ static void _heartbeat_timer_handler( __attribute__((unused)) unsigned hnd,
     attach_timer_handler( 1000/HEARTBEAT_FREQUENCY, _heartbeat_timer_handler, 0, 0 );
 }
 
-
+#ifndef STANDALONE_TERMINAL
 void uart_fill_queue( __attribute__((unused)) void* data )
 {
     while( !( *UART0_FR & 0x10)/*uart_poll()*/)
@@ -229,48 +234,53 @@ void uart_fill_queue( __attribute__((unused)) void* data )
         }
         if( rts_on && uart_buffer_count > RTS_OFF_LIMIT ) {
             rts_on = 0;
-            W32(GPSET0,1<<18);      // tell the computer to stop sending
+            W32(GPSET0,1<<18);      // RTS (GPIO18) high: tell the computer to stop sending
         }
-
     }
 
     /* Clear UART0 interrupts */
     *UART0_ITCR = 0xFFFFFFFF;
 }
-
+#endif
 
 
 void initialize_uart_irq()
 {
+#ifndef STANDALONE_TERMINAL
     uart_buffer_start = uart_buffer_end = uart_buffer;
     uart_buffer_count = 0;
     uart_buffer_limit = &( uart_buffer[ UART_BUFFER_SIZE ] );
-
+#endif
     UART0_DR   = (volatile unsigned int*)0x20201000;
     UART0_IMSC = (volatile unsigned int*)0x20201038;
     UART0_ITCR = (volatile unsigned int*)0x20201044;
     UART0_FR   = (volatile unsigned int*)0x20201018;
-
+#ifndef STANDALONE_TERMINAL
     *UART0_IMSC = (1<<4) | (1<<7) | (1<<9); // Masked interrupts: RXIM + FEIM + BEIM (See pag 188 of BCM2835 datasheet)
     *UART0_ITCR = 0xFFFFFFFF; // Clear UART0 interrupts
 
     pIRQController->Enable_IRQs_2 = RPI_UART_INTERRUPT_IRQ;
     enable_irq();
     irq_attach_handler( 57, uart_fill_queue, 0 );
+#endif
 }
-
 
 void heartbeat_init()
 {
     unsigned int ra;
     ra=R32(GPFSEL1);
     ra&=~(7<<18);
-    ra|=1<<18;
+    ra|=1<<18;             // GPIO16 is an output
+#ifndef STANDALONE_TERMINAL
     ra&=~(7<<24);
-    ra|=1<<24;
+    ra|=1<<24;             // GPIO18 is an output
+#endif
     W32(GPFSEL1,ra);
-    W32(GPCLR0,1<<18);   // RTS asserted (low)
+
+#ifndef STANDALONE_TERMINAL    
     rts_on = 1;
+    W32(GPCLR0,1<<18);     // RTS (GPIO18) asserted (low)
+#endif
 
     // Enable JTAG pins
     W32( 0x20200000, 0x04a020 );
@@ -293,11 +303,11 @@ void heartbeat_loop()
         {
             if( led_status )
             {
-                W32(GPCLR0,1<<16);
+                W32(GPCLR0,1<<16);  // GPIO16 is low
                 led_status = 0;
             } else
             {
-                W32(GPSET0,1<<16);
+                W32(GPSET0,1<<16);  // GPIO16 is high
                 led_status = 1;
             }
             last_time = curr_time;
@@ -490,18 +500,26 @@ void term_main_loop()
     while(1)
     {
         USPiKeyboardUpdateLEDs();
+#ifdef STANDALONE_TERMINAL
+        if( !DMA_CHAN0_BUSY && !(*UART0_FR & UART_RXFE) )
+#else
         if( !DMA_CHAN0_BUSY && uart_buffer_start != uart_buffer_end )
+#endif
         {
+#ifdef STANDALONE_TERMINAL
+            strb[0] = (char)( *UART0_DR & 0xFF /*uart_read_byte()*/);
+#else
             strb[0] = *uart_buffer_start++;
             if( uart_buffer_count > 0 ) {
                 --uart_buffer_count;
             }
             if( !rts_on && uart_buffer_count < RTS_ON_LIMIT ) {
                 rts_on = 1;
-                W32(GPCLR0,1<<18);  // tell the computer to resume sending
+                W32(GPCLR0,1<<18);  // RTS (GPIO18) low: tell the computer to resume sending
             }
             if( uart_buffer_start >= uart_buffer_limit )
                 uart_buffer_start = uart_buffer;
+#endif
 
             
 #if ENABLED(SKIP_BACKSPACE_ECHO)
@@ -521,7 +539,9 @@ void term_main_loop()
             gfx_term_putstring( strb );
         }
 
+#ifndef STANDALONE_TERMINAL
         uart_fill_queue(0);
+#endif
         timer_poll();
     }
 
@@ -533,9 +553,11 @@ void entry_point()
     // Heap init
     nmalloc_set_memory_area( (unsigned char*)( pheap_space ), heap_sz );
 
+#ifndef STANDALONE_TERMINAL
     // UART buffer allocation
     uart_buffer = (volatile char*)nmalloc_malloc( UART_BUFFER_SIZE ); 
     uart_buffer_count = 0;
+#endif
     
     uart_init();
     add_initial_baudrate();
@@ -560,7 +582,6 @@ void entry_point()
 
     timers_init();
     attach_timer_handler( HEARTBEAT_FREQUENCY, _heartbeat_timer_handler, 0, 0 );
-
     initialize_uart_irq();
 
 //    video_test();

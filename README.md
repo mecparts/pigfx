@@ -5,7 +5,7 @@
 
 This is a fork of https://github.com/dhansel/pigfx (which is a fork of 
 https://github.com/fbergama/pigfx) with some changes to work better as a
-terminal for my [RunCPM based ZCPR3.3/ZSDOS system](https://github.com/mecparts/RunCPM/tree/zcpr33)
+terminal for my [RunCPM based ZCPR3.3/ZSDOS system](https://github.com/mecparts/TeensyBoardZ80)
 and in general. The changes are:
 - completely separate carriage return (\r, 0x0d) and line feed (\n,
 0x0a) handling on input and output
@@ -17,9 +17,9 @@ and in general. The changes are:
 - moved to most recent USPi library for keyboard LED support
 - properly support keyboard repeat function
 - fixed 2 key rollover
-- a quasi RTS output to tell the sending computer to hold up (toggled
-  off when the input buffer is 3/4s full and back on when the buffer is
-  down to 1/4 full)
+- an option of true RTS/CTS handshaking or a quasi RTS output to tell
+  the sending computer to hold up (toggled off when the input buffer 
+  is 3/4s full and back on when the buffer is down to 1/4 full)
 
 I have tested this both on a 512MB Raspberry Pi B and a Pi Zero (the non
 wireless version). It was built on a Raspberry Pi 3 B+ and the makefiles
@@ -33,6 +33,8 @@ The serial port is on the following pins:
 - TX (out)    : GPIO14 (pin 8 of the 2-row GPIO connector)
 - RX (in)     : GPIO15 (pin 10 of the 2-row GPIO connector)
 - "RTS" (out) : GPIO18 (pin12 of of the 2-row GPIO connector)
+- CTS (in)    : GPIO30 (pin 5 of the P5 header)
+- RTS (out)   : GPIO31 (pin 6 of the P5 header)
 
 Note that Raspberry Pi pins are 3.3V (not 5V tolerant).
 

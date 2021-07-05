@@ -60,7 +60,20 @@ uart_init:
     ; @ clear PUDCLK0
     mov r0, #0x0
     str r0, [r3, #0x98]
+.ifdef STANDALONE_TERMINAL
+    ; @ wait 300 cycles
+    mov r0, #300
+    bl  busywait
 
+    ; @ set GPIO30 and GPIO31 to ALT3 functions (CTS & RTS)
+    ldr r0, [r3, #0x0C]
+    orr r0, r0, #0x3F
+    str r0, [r3, #0x0c]
+
+    ; @ wait 300 cycles
+    mov r0, #300
+    bl  busywait
+.endif
     ;@ set r3 = UART0_BASE = 0x20201000        
     orr r3, r3, #0x1000
     
@@ -77,9 +90,19 @@ uart_init:
     ;@ Set 8bit (bit 6-5=1), no parity (bit 7=0), FIFO enable (bit 4=1)
     mov r0, #0x70
     str r0, [r3, #0x2C]  ;@ UART0_LCRH 
+.ifdef STANDALONE_TERMINAL
+    ;@ Set Rx and Tx FIFO watermarks at 3/4 full
+    mov r0, #0x03
+    mov r0, r0, LSL #3
+    add r0, r0, #0x03
+    str r0, [r3, #0x34]  ;@ UART0_IFLS
 
+    ;@ Enable CTSEN(bit15) RTSEN(bit14) TX(bit9) RX(bit8) and UART0(bit0)
+    mov r0, #0xC3
+.else
     ;@ Enable TX(bit9) RX(bit8) and UART0(bit0)
-    mov r0, #0x3
+    mov r0, #0x03
+.endif
     mov r0, r0, LSL #8
     add r0, r0, #1
     str r0, [r3, #0x30]  ;@ UART0_CR  
