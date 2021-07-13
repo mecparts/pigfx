@@ -2,6 +2,7 @@
 #include "uart.h"
 #include "utils.h"
 #include "timer.h"
+#include "bell.h"
 #include "framebuffer.h"
 #include "console.h"
 #include "gfx.h"
@@ -12,26 +13,23 @@
 #include "../uspi/env/include/uspienv/types.h"
 #include "../uspi/include/uspi.h"
 
-
-#define GPFSEL1 0x20200004
-#define GPSET0  0x2020001C
-#define GPCLR0  0x20200028
-
-#define UART_RXFE 0x10
+#define HEARTBEAT_PIN   16
 
 #ifndef STANDALONE_TERMINAL
+#define QUASI_RTS_PIN   18
 #define UART_BUFFER_SIZE 16384u /* 16k */
 #define RTS_OFF_LIMIT (3*UART_BUFFER_SIZE/4)
 #define RTS_ON_LIMIT (UART_BUFFER_SIZE/4)
 #endif
 
 unsigned int led_status;
+
+#ifndef STANDALONE_TERMINAL
 volatile unsigned int* UART0_DR;
 volatile unsigned int* UART0_ITCR;
 volatile unsigned int* UART0_IMSC;
 volatile unsigned int* UART0_FR;
 
-#ifndef STANDALONE_TERMINAL
 volatile char* uart_buffer;
 volatile char* uart_buffer_start;
 volatile char* uart_buffer_end;
@@ -85,6 +83,8 @@ static int baud[] = {300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 1152
 
 static void uart0_setbaud(unsigned int baud)
 {
+  peripheral_entry();
+  
   unsigned int divider    = 3000000 / baud;
   unsigned int f1         = (3000000 % baud) * 64;
   unsigned int fractional = f1 / baud;
@@ -97,14 +97,19 @@ static void uart0_setbaud(unsigned int baud)
   UART0[0x0a]  = fractional;   // set fractional divider
   UART0[0x0b] |= 0x10;         // enable FIFO
   UART0[0x0c] |= 0x01;         // enable UART
+
+  peripheral_exit();
 }
 
 
 static unsigned int uart0_getbaud()
 {
+  peripheral_entry();
+
   unsigned int f = (UART0[0x09]*64) + (UART0[0x0a]&63);
   unsigned int baud = f==0 ? 0 : (3000000*64) / f;
   if( (3000000*64)-(baud*f) >= f/2 ) baud++;
+  peripheral_exit();
   return baud;
 }
 
@@ -200,15 +205,8 @@ static void _heartbeat_timer_handler( __attribute__((unused)) unsigned hnd,
                                       __attribute__((unused)) void* pParam, 
                                       __attribute__((unused)) void *pContext )
 {
-    if( led_status )
-    {
-        W32(GPCLR0,1<<16);
-        led_status = 0;
-    } else
-    {
-        W32(GPSET0,1<<16);
-        led_status = 1;
-    }
+    led_status = !led_status;
+    digitalWrite(HEARTBEAT_PIN, led_status);
 
     attach_timer_handler( 1000/HEARTBEAT_FREQUENCY, _heartbeat_timer_handler, 0, 0 );
 }
@@ -216,9 +214,9 @@ static void _heartbeat_timer_handler( __attribute__((unused)) unsigned hnd,
 #ifndef STANDALONE_TERMINAL
 void uart_fill_queue( __attribute__((unused)) void* data )
 {
-    while( !( *UART0_FR & 0x10)/*uart_poll()*/)
+    while( uart_poll() )
     {
-        *uart_buffer_end++ = (char)( *UART0_DR & 0xFF /*uart_read_byte()*/);
+        *uart_buffer_end++ = (char)uart_read_byte());
 
         if( uart_buffer_end >= uart_buffer_limit )
            uart_buffer_end = uart_buffer; 
@@ -234,85 +232,54 @@ void uart_fill_queue( __attribute__((unused)) void* data )
         }
         if( rts_on && uart_buffer_count > RTS_OFF_LIMIT ) {
             rts_on = 0;
-            W32(GPSET0,1<<18);      // RTS (GPIO18) high: tell the computer to stop sending
+            digitalWrite(QUASI_RTS_PIN, HIGH);  // RTS (GPIO18) high: tell the computer to stop sending
         }
     }
 
     /* Clear UART0 interrupts */
     *UART0_ITCR = 0xFFFFFFFF;
+    
+    peripheral_exit();
 }
 #endif
 
 
+#ifndef STANDALONE_TERMINAL
 void initialize_uart_irq()
 {
-#ifndef STANDALONE_TERMINAL
+    peripheral_entry();
+    
     uart_buffer_start = uart_buffer_end = uart_buffer;
     uart_buffer_count = 0;
     uart_buffer_limit = &( uart_buffer[ UART_BUFFER_SIZE ] );
-#endif
+
     UART0_DR   = (volatile unsigned int*)0x20201000;
     UART0_IMSC = (volatile unsigned int*)0x20201038;
     UART0_ITCR = (volatile unsigned int*)0x20201044;
     UART0_FR   = (volatile unsigned int*)0x20201018;
-#ifndef STANDALONE_TERMINAL
+
     *UART0_IMSC = (1<<4) | (1<<7) | (1<<9); // Masked interrupts: RXIM + FEIM + BEIM (See pag 188 of BCM2835 datasheet)
     *UART0_ITCR = 0xFFFFFFFF; // Clear UART0 interrupts
 
     pIRQController->Enable_IRQs_2 = RPI_UART_INTERRUPT_IRQ;
     enable_irq();
     irq_attach_handler( 57, uart_fill_queue, 0 );
-#endif
+    
+    peripheral_exit();
 }
+#endif
 
 void heartbeat_init()
 {
-    unsigned int ra;
-    ra=R32(GPFSEL1);
-    ra&=~(7<<18);
-    ra|=1<<18;             // GPIO16 is an output
+    pinMode(HEARTBEAT_PIN, GPIO_OUTPUT);
 #ifndef STANDALONE_TERMINAL
-    ra&=~(7<<24);
-    ra|=1<<24;             // GPIO18 is an output
-#endif
-    W32(GPFSEL1,ra);
-
-#ifndef STANDALONE_TERMINAL    
+    pinMode(QUASI_RTS_PIN, GPIO_OUTPUT);
+    
     rts_on = 1;
-    W32(GPCLR0,1<<18);     // RTS (GPIO18) asserted (low)
+    digitalWrite(QUASI_RTS_PIN, LOW);   // RTS (GPIO18) asserted (low)
 #endif
-
-    // Enable JTAG pins
-    W32( 0x20200000, 0x04a020 );
-    W32( 0x20200008, 0x65b6c0 );
 
     led_status=0;
-}
-
-
-void heartbeat_loop()
-{
-    unsigned int last_time = 0;
-    unsigned int curr_time;
-
-    while(1)
-    {
-        
-        curr_time = time_microsec();
-        if( curr_time-last_time > 500000 )
-        {
-            if( led_status )
-            {
-                W32(GPCLR0,1<<16);  // GPIO16 is low
-                led_status = 0;
-            } else
-            {
-                W32(GPSET0,1<<16);  // GPIO16 is high
-                led_status = 1;
-            }
-            last_time = curr_time;
-        } 
-    }
 }
 
 
@@ -501,13 +468,13 @@ void term_main_loop()
     {
         USPiKeyboardUpdateLEDs();
 #ifdef STANDALONE_TERMINAL
-        if( !DMA_CHAN0_BUSY && !(*UART0_FR & UART_RXFE) )
+        if( !dma_running(0) && uart_poll() )
 #else
         if( !DMA_CHAN0_BUSY && uart_buffer_start != uart_buffer_end )
 #endif
         {
 #ifdef STANDALONE_TERMINAL
-            strb[0] = (char)( *UART0_DR & 0xFF /*uart_read_byte()*/);
+            strb[0] = (char)uart_read_byte();
 #else
             strb[0] = *uart_buffer_start++;
             if( uart_buffer_count > 0 ) {
@@ -515,7 +482,7 @@ void term_main_loop()
             }
             if( !rts_on && uart_buffer_count < RTS_ON_LIMIT ) {
                 rts_on = 1;
-                W32(GPCLR0,1<<18);  // RTS (GPIO18) low: tell the computer to resume sending
+                digitalWrite(QUASI_RTS_PIN, LOW);   // RTS (GPIO18) low: tell the computer to resume sending
             }
             if( uart_buffer_start >= uart_buffer_limit )
                 uart_buffer_start = uart_buffer;
@@ -562,8 +529,7 @@ void entry_point()
     uart_init();
     add_initial_baudrate();
     heartbeat_init();
-    
-    //heartbeat_loop();
+    bell_init();
     
     initialize_framebuffer();
 
@@ -582,7 +548,9 @@ void entry_point()
 
     timers_init();
     attach_timer_handler( HEARTBEAT_FREQUENCY, _heartbeat_timer_handler, 0, 0 );
+#ifndef STANDALONE_TERMINAL
     initialize_uart_irq();
+#endif
 
 //    video_test();
 //    video_line_test();

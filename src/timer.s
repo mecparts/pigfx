@@ -5,6 +5,8 @@
 .global usleep
 usleep:
     push {r1,r2,r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
 
     mov r1, #0x2000
     lsl r1, #16
@@ -22,6 +24,8 @@ usleep:
     blt 1b  ;@ busy loop
     
 
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r1,r2,r3}
     bx lr
 
@@ -29,6 +33,8 @@ usleep:
 .global time_microsec
 time_microsec:
     push {r1,r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
 
     mov r1, #0x2000
     lsl r1, #16
@@ -37,6 +43,9 @@ time_microsec:
 
     add r3, r1, #0x4   ;@ (r3 = system timer lower 32 bits)
     ldr r0, [r3]
+
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r1,r3}
     bx lr
     

@@ -59,7 +59,8 @@ int dma_enqueue_operation( unsigned int* src, unsigned int *dst, unsigned int le
 
 void dma_execute_queue()
 {
-
+    peripheral_entry();
+    
     // Enable DMA on channel 0
     *( (volatile unsigned int*)( DMA_BASE + 0xFF0) ) = 1;
 
@@ -72,13 +73,17 @@ void dma_execute_queue()
 
     // reset the queue
     curr_blk=0;
+    
+    peripheral_exit();
 }
 
 
-int dma_running()
+int dma_running(unsigned int channel)
 {
-    unsigned int channel = 0;
-    return *( (volatile unsigned int*)DMA_BASE + (channel << 6) + DMA_CS_OFFSET  ) &  0x1;
+    peripheral_entry();
+    unsigned int running = *( (volatile unsigned int*)DMA_BASE + (channel << 6) + DMA_CS_OFFSET  ) &  0x1;
+    peripheral_exit();
+    return running;
 }
 
 

@@ -8,6 +8,24 @@ extern void busywait( unsigned int cycles );
 extern void W32( unsigned int addr, unsigned int data );
 extern unsigned int R32( unsigned int addr );
 extern void membarrier();
+extern void peripheral_entry();
+extern void peripheral_exit();
+
+#define GPIO_INPUT  0
+#define GPIO_OUTPUT 1
+#define GPIO_ALT0   4
+#define GPIO_ALT1   5
+#define GPIO_ALT2   6
+#define GPIO_ALT3   7
+#define GPIO_ALT4   3
+#define GPIO_ALT5   2
+
+extern void pinMode( unsigned int pin, unsigned int mode );
+
+#define LOW     0
+#define HIGH    1
+
+extern void digitalWrite( unsigned int pin, unsigned int state);
 
 /**
  * String related

@@ -54,8 +54,109 @@ membarrier:
     mcr p15, 0, r3, c7, c14, 0      ;@ Clean and Invalidate Entire Data Cache
     mcr p15, 0, r3, c7, c10, 4      ;@ Data Synchronization Barrier
     mcr p15, 0, r3, c7, c10, 5      ;@ Data Memory Barrier
+    pop {r3}
     bx lr
 
+;@ do a DSM equivalent for peripheral entry
+;@
+.global peripheral_entry
+peripheral_entry:
+    push {r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4      ;@ Data Synchronization Barrier
+    pop {r3}
+    bx lr
+
+;@ do a DMV equivalent for peripheral exit
+;@
+.global peripheral_exit
+peripheral_exit:
+    push {r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5      ;@ Data Memory Barrier
+    pop {r3}
+    bx lr
+
+;@ pinMode
+;@  set GPIO pin to a particular mode
+;@  r0: pin #
+;@  r1: mode
+.global pinMode
+pinMode:
+    push {r0, r1, r2, r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4      ;@ Data Synchronization Barrier
+    
+    cmp r0, #53+1
+    bhs pinModeExit
+    cmp r1, #7+1
+    bhs pinModeExit
+    
+    mov r3, #0x20
+    mov r3, r3, LSL #8
+    orr r3, r3,  #0x20
+    mov r3, r3, LSL #16             ;@ r3 = GPIO_BASE = 0x20200000
+
+    mov r2,#7                       ;@ r2(mask) = 7
+pinLoop:
+    cmp r0,#10
+    blt maskLoop
+    add r3, r3, #4
+    sub r0, r0, #10
+    b   pinLoop
+maskLoop:
+    cmp r0,#0
+    beq maskDone
+    lsl r1, r1, #3
+    lsl r2, r2, #3
+    sub r0, r0, #1
+    b   maskLoop
+maskDone:
+    ldr r0, [r3]
+    bic r0, r0, r2                  ;@ mask off 3 shifted bits
+    orr r0, r0, r1                  ;@ or in shifted mode
+    str r0, [r3]
+pinModeExit:
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5      ;@ Data Memory Barrier
+    pop {r0, r1, r2, r3}
+    bx lr
+
+;@ digitalWrite
+;@  set GPIO pin to a particular state
+;@  r0: pin #
+;@  r1: state (0=low, !0=high)
+.global digitalWrite
+digitalWrite:
+    push {r0, r1, r3}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4      ;@ Data Synchronization Barrier
+
+    mov r3, #0x20
+    mov r3, r3, LSL #8
+    orr r3, r3, #0x20
+    mov r3, r3, LSL #16
+    orr r3, r3, #0x1C             ;@ r3 = GPSET0 = 0x2020001C
+
+    cmp r0, #0
+    blt digitalWriteExit
+    cmp r0, #32
+    addge r3, r3, #4            ;@ pin>=32, r3 = GPSET1
+    cmp r0, #53
+    bgt digitalWriteExit
+    cmp r1, #0
+    addeq r3, r3, #0x0C            ;@ R3 = GPCLRx
+    
+    mov r1, #1
+    and r0, #31
+    lsl r1, r1, r0
+    str r1, [r3]
+    
+digitalWriteExit:
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5      ;@ Data Memory Barrier
+    pop {r0, r1, r3}
+    bx lr
 
 ;@ strlen
 .global strlen
@@ -73,7 +174,6 @@ strlen:
 2:
     pop {r1,r2}
     bx lr
-
 
 ;@ strcmp
 ;@  r0: string 1 address

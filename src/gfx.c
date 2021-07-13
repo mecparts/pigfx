@@ -3,6 +3,7 @@
 #include "console.h"
 #include "dma.h"
 #include "utils.h"
+#include "bell.h"
 #include "uart.h"
 #include "ee_printf.h"
 #include "framebuffer.h"
@@ -1337,7 +1338,7 @@ void gfx_term_render_cursor()
     // Save framebuffer content that is going to be replaced by the cursor and update
     // the new content
     //
-    while( DMA_CHAN0_BUSY ); // Busy wait for DMA
+    while( dma_running(0) ); // Busy wait for DMA
 
     unsigned char *p;
     unsigned int* pb = (unsigned int*)ctx.cursor_buffer;
@@ -1399,7 +1400,7 @@ void gfx_term_putstring( const char* str )
 {
     while( *str )
     {
-        while( DMA_CHAN0_BUSY ); // Busy wait for DMA
+        while( dma_running(0) ); // Busy wait for DMA
 
         switch( *str )
         {
@@ -1432,10 +1433,14 @@ void gfx_term_putstring( const char* str )
                 }
                 break;
 
-                 case 0x0e: // skip shift out
-                 case 0x0f: // skip shift in
-                 case 0x07: // skip BELL
-                     break;
+            case 0x0e: // skip shift out
+            case 0x0f: // skip shift in
+                break;
+                     
+            case 0x07:
+                /* ring console bell */
+                bell();
+                break;
 
             case 0x0c:
                 /* new page */

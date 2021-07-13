@@ -4,12 +4,15 @@
 .global uart_init
 uart_init:
     push {r0,r1,r3,lr}
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
 
     ;@ set TX to use no resistor, RX to use pull-up resistor
     mov r3, #0x20
     mov r3, r3, LSL #8
     orr r3, r3,  #0x20
     mov r3, r3, LSL #16   ;@ r3 = GPIO_BASE = 0x20200000
+
 
     ;@  write 0 to GPPUD (use no resistor)
     mov r0, #0x0
@@ -36,6 +39,7 @@ uart_init:
     mov r0, #0x0
     str r0, [r3, #0x98]  
 
+
     ; @  write 2 to GPPUD (use pull-up resistor)
     mov r0, #0x02
     str r0, [r3, #0x94]
@@ -60,22 +64,29 @@ uart_init:
     ; @ clear PUDCLK0
     mov r0, #0x0
     str r0, [r3, #0x98]
-.ifdef STANDALONE_TERMINAL
-    ; @ wait 300 cycles
-    mov r0, #300
-    bl  busywait
 
+
+.ifdef STANDALONE_TERMINAL
     ; @ set GPIO30 and GPIO31 to ALT3 functions (CTS & RTS)
     ldr r0, [r3, #0x0C]
     orr r0, r0, #0x3F
     str r0, [r3, #0x0c]
-
-    ; @ wait 300 cycles
-    mov r0, #300
-    bl  busywait
 .endif
+
+
+    mov r3, #0                              ; @ changing peripherals
+    mcr p15, 0, r3, c7, c10, 5              ; @ from GPIO 
+                                            ; @
+    mov r3, #0                              ; @ to UART0
+    mcr p15, 0, r3, c7, c10, 4              ; @
+    
     ;@ set r3 = UART0_BASE = 0x20201000        
-    orr r3, r3, #0x1000
+    mov r3, #0x20
+    lsl r3, r3, #8
+    orr r3, #0x20
+    lsl r3, r3, #8
+    orr r3, #0x10
+    lsl r3, r3, #8
     
     ;@ Disable UART0:
     ;@ clear UART0_CR = UART0_BASE + 0x30;
@@ -107,6 +118,8 @@ uart_init:
     add r0, r0, #1
     str r0, [r3, #0x30]  ;@ UART0_CR  
 
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r0,r1,r3,lr}
     bx lr        
 
@@ -119,7 +132,9 @@ uart_init:
 .global uart_write
 uart_write:
     push {r2,r3,r4,r5,r6}
-
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
+    
     ;@ set r3=UART0_BASE=0x20201000
     mov r3, #0x20
     lsl r3, r3, #8
@@ -159,6 +174,8 @@ shift_and_send:
 
 write_done:
     
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r2,r3,r4,r5,r6}
     bx lr
 
@@ -169,7 +186,7 @@ write_done:
 .global uart_write_str
 uart_write_str:
     push {r0,lr}
-
+    
     bl   strlen  ;@ strlen wants string address in r0
     mov r1, r0
 
@@ -185,7 +202,9 @@ uart_write_str:
 .global uart_poll
 uart_poll:
     push {r3,r4}
-
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
+    
     ;@ set r3=UART0_BASE=0x20201000
     mov r3, #0x20
     lsl r3, r3, #8
@@ -201,6 +220,8 @@ uart_poll:
     mov r0, #1
     
 1:
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r3,r4}
     bx lr
     
@@ -210,7 +231,9 @@ uart_poll:
 uart_read_byte:
 
     push {r3,r4}
-
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 4
+    
     ;@ set r3=UART0_BASE=0x20201000
     mov r3, #0x20
     lsl r3, r3, #8
@@ -228,6 +251,8 @@ bwr:
     ldr r0, [r3]        ;@ read from RX fifo
     and r0, #0xFF
 
+    mov r3, #0
+    mcr p15, 0, r3, c7, c10, 5
     pop {r3,r4}
     bx lr
 
