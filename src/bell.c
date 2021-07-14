@@ -127,7 +127,7 @@ void bell() {
     };
 
     unsigned int nCount = sizeof bell_bits/sizeof(const unsigned char);
-    unsigned int dummy;
+    static unsigned int dummy;
 
     if( !bell_ringing() ) {
         if( bells_pending_count > 0 ) {
