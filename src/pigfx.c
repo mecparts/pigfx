@@ -216,7 +216,7 @@ void uart_fill_queue( __attribute__((unused)) void* data )
 {
     while( uart_poll() )
     {
-        *uart_buffer_end++ = (char)uart_read_byte());
+        *uart_buffer_end++ = (char)uart_read_byte();
 
         if( uart_buffer_end >= uart_buffer_limit )
            uart_buffer_end = uart_buffer; 
@@ -468,9 +468,13 @@ void term_main_loop()
     {
         USPiKeyboardUpdateLEDs();
 #ifdef STANDALONE_TERMINAL
+        if( bells_pending() && !bell_ringing() ) {
+            strb[0] = '\a';
+            gfx_term_putstring( strb );
+        }
         if( !dma_running(0) && uart_poll() )
 #else
-        if( !DMA_CHAN0_BUSY && uart_buffer_start != uart_buffer_end )
+        if( !dma_running(0) && uart_buffer_start != uart_buffer_end )
 #endif
         {
 #ifdef STANDALONE_TERMINAL
@@ -529,7 +533,9 @@ void entry_point()
     uart_init();
     add_initial_baudrate();
     heartbeat_init();
+#ifdef STANDALONE_TERMINAL
     bell_init();
+#endif
     
     initialize_framebuffer();
 

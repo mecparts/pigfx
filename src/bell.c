@@ -16,7 +16,10 @@
 // surprised that that actually worked.
 //
 // V0.9  Jul 11 2021  SWH  First non DMA version working
+// V1.0  Jul 14 2021  SWH  First DMA version working
 //
+#include "bell.h"
+#include "dma.h"
 #include "utils.h"
 
 #define CORE_CLOCK 250000000ul
@@ -30,7 +33,7 @@
 #define SPI0_DLEN   (SPI0_BASE + 0x0c)
 #define SPI0_DC     (SPI0_BASE + 0x14)
 
-// CS Register
+// SPI0 CS Register
 #define CS_LEN_LONG	(1 << 25)
 #define CS_DMA_LEN	(1 << 24)
 #define CS_CSPOL2	(1 << 23)
@@ -56,21 +59,31 @@
 #define CS_CS		(1 << 0)
 #define CS_CS__SHIFT	0
 
+#define SPI0_TX_DMA_CHANNEL 1
+#define SPI0_RX_DMA_CHANNEL 2
+
+static unsigned int bells_pending_count = 0;
+
 void bell_init() {
+    
+    dma_init(SPI0_TX_DMA_CHANNEL);
+    dma_init(SPI0_RX_DMA_CHANNEL);
+    
     pinMode(10, GPIO_ALT0); // GPIO10 is SPI0 MOSI
     
     peripheral_entry();
 
     // set SPI clock to 8000Hz
-	W32(SPI0_CLK, CORE_CLOCK / SPI_CLOCK);
-	W32(SPI0_CS, (0 << CS_CPOL__SHIFT) | (0 << CS_CPHA__SHIFT));
+    W32(SPI0_CLK, CORE_CLOCK / SPI_CLOCK);
+    W32(SPI0_CS, (0 << CS_CPOL__SHIFT) | (0 << CS_CPHA__SHIFT));
     
     peripheral_exit();
 }
 
+
 void bell() {
     // console bell: 200ms of 800Hz tone (160 x 10 bit cycles)
-    static const unsigned char bell_bits[] = {
+    static const unsigned char __attribute__((aligned(4))) bell_bits[] = {
         0b11111000,0b00111110,0b00001111,0b10000011,0b11100000,
         0b11111000,0b00111110,0b00001111,0b10000011,0b11100000,
         0b11111000,0b00111110,0b00001111,0b10000011,0b11100000,
@@ -112,38 +125,51 @@ void bell() {
         0b11111000,0b00111110,0b00001111,0b10000011,0b11100000,
         0b11111000,0b00111110,0b00001111,0b10000011,0b11100000
     };
-	const unsigned char *pWritePtr = bell_bits;
+
     unsigned int nCount = sizeof bell_bits/sizeof(const unsigned char);
-    unsigned int nData;
+    unsigned int dummy;
 
-	peripheral_entry ();
+    if( !bell_ringing() ) {
+        if( bells_pending_count > 0 ) {
+            --bells_pending_count;
+        }
+        dma_enqueue_operation(
+            SPI0_TX_DMA_CHANNEL, 
+            (unsigned int *)mem_2uncached(bell_bits), 
+            BUS_IO_ADDRESS(SPI0_FIFO), 
+            nCount, 
+            0, 
+            DMA_TI_DREQ_SPITX | DMA_TI_SRC_INC | DMA_TI_DEST_DREQ | DMA_TI_WAIT_RESP);
+        dma_enqueue_operation(
+            SPI0_RX_DMA_CHANNEL, 
+            BUS_IO_ADDRESS(SPI0_FIFO), 
+            (unsigned int *)mem_2uncached(&dummy),
+            nCount,
+            0,
+            DMA_TI_DREQ_SPIRX | DMA_TI_SRC_DREQ | DMA_TI_WAIT_RESP);
 
-	// SCLK stays low for one clock cycle after each byte without this
-	W32(SPI0_DLEN, nCount);
+        peripheral_entry();
+    
+        W32(SPI0_DLEN, nCount);
+        W32(SPI0_CS, CS_CLEAR_RX | CS_CLEAR_TX | CS_DMAEN | CS_TA);
+    
+        peripheral_exit();
 
-	W32(SPI0_CS, R32(SPI0_CS) | CS_CLEAR_RX | CS_CLEAR_TX | CS_TA);
+        dma_execute_queue(SPI0_TX_DMA_CHANNEL);
+        dma_execute_queue(SPI0_RX_DMA_CHANNEL);
+    } else {
+        if( bells_pending_count < 5 ) {
+            ++bells_pending_count;
+        }
+    }
+}
 
-	unsigned int nWriteCount = 0;
-	unsigned int nReadCount = 0;
 
-	while( nWriteCount < nCount || nReadCount  < nCount) {
-		while( nWriteCount < nCount && (R32(SPI0_CS) & CS_TXD)) {
-			nData = *pWritePtr++;
-			W32(SPI0_FIFO, nData);
-            ++nWriteCount;
-		}
+int bell_ringing() {
+    return dma_running(SPI0_TX_DMA_CHANNEL) || dma_running(SPI0_RX_DMA_CHANNEL);
+}
 
-		while( nReadCount < nCount && (R32(SPI0_CS) & CS_RXD) ) {
-			R32(SPI0_FIFO);
-			++nReadCount;
-		}
-	}
 
-	while( !(R32(SPI0_CS) & CS_DONE) ) {
-		while( R32(SPI0_CS) & CS_RXD ) {
-			R32(SPI0_FIFO);
-		}
-	}
-
-	peripheral_exit();
+int bells_pending() {
+    return bells_pending_count;
 }

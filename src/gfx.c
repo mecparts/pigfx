@@ -177,7 +177,7 @@ void gfx_set_font_height(unsigned int h)
 
 void gfx_set_env( void* p_framebuffer, unsigned int width, unsigned int height, unsigned int pitch, unsigned int size )
 {
-    dma_init();
+    dma_init(0);
 
     ctx.full_pfb    = p_framebuffer;
     ctx.full_height = height;
@@ -242,13 +242,14 @@ void gfx_clear()
     *(BG+2) = *BG;
     *(BG+3) = *BG;
 
-    dma_enqueue_operation( BG,
+    dma_enqueue_operation( 0,
+            BG,
             (unsigned int *)( ctx.pfb ),
             ctx.size,
             0,
             DMA_TI_DEST_INC );
 
-    dma_execute_queue();
+    dma_execute_queue(0);
 #else
     unsigned char* pf = ctx.pfb;
     unsigned char* pfb_end = pf + ctx.size;
@@ -268,13 +269,15 @@ void gfx_scroll_down_dma( unsigned int npixels )
     unsigned int line_height = ctx.Pitch * npixels;
 
 
-    dma_enqueue_operation( (unsigned int *)( ctx.pfb + line_height ),
+    dma_enqueue_operation( 0,
+                           (unsigned int *)( ctx.pfb + line_height ),
                            (unsigned int *)( ctx.pfb ),
                            (ctx.size - line_height),
                            0,
                            DMA_TI_SRC_INC | DMA_TI_DEST_INC );
 
-    dma_enqueue_operation( BG,
+    dma_enqueue_operation( 0,
+                           BG,
                            (unsigned int *)( ctx.pfb + ctx.size -line_height ),
                            line_height,
                            0,
@@ -286,7 +289,7 @@ void gfx_scroll_down( unsigned int npixels )
 {
 #if ENABLED(GFX_USE_DMA)
     gfx_scroll_down_dma( npixels );
-    dma_execute_queue();
+    dma_execute_queue(0);
 #else
     unsigned int* pf_src = (unsigned int*)( ctx.pfb + ctx.Pitch*npixels);
     unsigned int* pf_dst = (unsigned int*)ctx.pfb;
@@ -363,7 +366,8 @@ void gfx_fill_rect_dma( unsigned int x, unsigned int y, unsigned int width, unsi
     *(FG+2) = *FG;
     *(FG+3) = *FG;
 
-    dma_enqueue_operation( FG,
+    dma_enqueue_operation( 0,
+                           FG,
                            (unsigned int *)( PFB(x,y) ),
                            (((height-1) & 0xFFFF )<<16) | (width & 0xFFFF ),
                            ((ctx.Pitch-width) & 0xFFFF)<<16, /* bits 31:16 destination stride, 15:0 source stride */
@@ -384,7 +388,7 @@ void gfx_fill_rect( unsigned int x, unsigned int y, unsigned int width, unsigned
 
 #if ENABLED(GFX_USE_DMA)
     gfx_fill_rect_dma( x, y, width, height );
-    dma_execute_queue();
+    dma_execute_queue(0);
 #else
     while( height-- )
     {
@@ -1438,8 +1442,10 @@ void gfx_term_putstring( const char* str )
                 break;
                      
             case 0x07:
+#ifdef STANDALONE_TERMINAL
                 /* ring console bell */
                 bell();
+#endif
                 break;
 
             case 0x0c:
@@ -1468,7 +1474,7 @@ void gfx_term_putstring( const char* str )
 
             gfx_scroll_down_dma(ctx.font_height);
             gfx_term_render_cursor_newline_dma();
-            dma_execute_queue();
+            dma_execute_queue(0);
         }
 
         ++str;
